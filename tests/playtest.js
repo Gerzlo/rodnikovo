@@ -16,9 +16,8 @@ const OUT = path.join(ROOT, 'test-results');
 fs.mkdirSync(OUT, { recursive: true });
 const SAVE_KEY = 'rodnikovo-save-1';
 const ALL_BUT_LAST = JSON.stringify({ stars: [3, 3, 3, 3, 3, 3, 3, 3, 3, 0] });
-const KNOWN = {
-  landscape: 'этап 2 — раскладка для телефона боком',
-};
+// Известные проблемы: { ключ: 'когда исправим' }. Сейчас таких нет.
+const KNOWN = {};
 
 const results = [];
 function check(name, ok, info = '', known = '') {
@@ -228,35 +227,58 @@ try {
   check('Ошибок в консоли нет (телефон)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 
-  /* 8. Маленькие экраны и телефон боком */
-  for (const [dev, shot, min, known] of [
-    ['iPhone SE', '40-small-street10', 40, ''],
-    ['Galaxy S8', null, 44, ''],
-    ['iPhone 13 landscape', '41-landscape-street10', 40, KNOWN.landscape],
+  /* 8. Маленькие телефоны и планшет боком */
+  for (const [dev, shot, min] of [
+    ['iPhone SE', '40-small-street10', 40],
+    ['Galaxy S8', null, 44],
+    ['iPad (gen 7) landscape', '42-tablet-street10', 44],
   ]) {
+    if (!devices[dev]) { console.log(`  --  ${dev}: такого устройства нет в Playwright, пропуск`); continue; }
     const c = await browser.newContext({ ...devices[dev] });
     const p = await c.newPage(); const e = watchErrors(p);
     await p.goto(URL); await p.evaluate(([k, v]) => localStorage.setItem(k, v), [SAVE_KEY, ALL_BUT_LAST]);
     await p.reload(); await sleep(700);
+    check(`${dev}: заставка «Поверни телефон» не мешает`, !(await p.isVisible('#rotate')));
     await openFromMap(p, 'touch');
     const l = await H(p, 'level'), vp = p.viewportSize();
     if (shot) await p.screenshot({ path: `${OUT}/${shot}.png` });
-    check(`${dev} (${vp.width}×${vp.height}): клетка не меньше ${min} px`, l.board.S >= min, `клетка ${l.board.S} px на поле ${l.W}×${l.H}`, known);
+    check(`${dev} (${vp.width}×${vp.height}): клетка не меньше ${min} px`, !!l && l.board.S >= min, l ? `клетка ${l.board.S} px на поле ${l.W}×${l.H}` : 'улица не открылась');
     check(`${dev}: без ошибок`, e.length === 0, e.join(' | '));
     await c.close();
   }
 
-  /* 9. Компьютер, мышь */
+  /* 9. Телефон боком: игра просит повернуть телефон и не пропускает касания */
+  {
+    const c = await browser.newContext({ ...devices['iPhone 13 landscape'] });
+    const p = await c.newPage(); const e = watchErrors(p);
+    await p.goto(URL); await p.evaluate(([k, v]) => localStorage.setItem(k, v), [SAVE_KEY, ALL_BUT_LAST]);
+    await p.reload(); await sleep(700);
+    check('Телефон боком: показывает «Поверни телефон»', await p.isVisible('#rotate'));
+    await p.screenshot({ path: `${OUT}/41-landscape.png` });
+    const bb = await p.locator('#btnPlay').boundingBox();
+    await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); await sleep(400);
+    check('Телефон боком: касания в игру не проходят', (await H(p, 'screen')) === 'map' && !(await p.isVisible('#ov')));
+    await p.setViewportSize({ width: 390, height: 664 }); await sleep(700);
+    check('Повернули вертикально: заставка исчезла', !(await p.isVisible('#rotate')));
+    await openFromMap(p, 'touch');
+    const l = await H(p, 'level');
+    check('После поворота можно играть: клетка не меньше 44 px', !!l && l.board.S >= 44, l ? `клетка ${l.board.S} px` : 'улица не открылась');
+    check('Телефон боком: без ошибок', e.length === 0, e.join(' | '));
+    await c.close();
+  }
+
+  /* 10. Компьютер, мышь */
   {
     const c = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const p = await c.newPage(); const e = watchErrors(p);
     await p.goto(URL); await sleep(700);
-    await p.screenshot({ path: `${OUT}/42-desktop-map.png` });
+    check('Компьютер: заставка «Поверни телефон» не появляется', !(await p.isVisible('#rotate')));
+    await p.screenshot({ path: `${OUT}/43-desktop-map.png` });
     await openFromMap(p, 'mouse');
     let l = await H(p, 'level');
     await tapCell(p, l, l.cells.find(x => x.type === 'pipe' && !x.locked), 'mouse', 'right');
     check('Компьютер: правая кнопка мыши трубу не крутит', (await H(p, 'level')).moves === 0);
-    await p.screenshot({ path: `${OUT}/43-desktop-street1.png` });
+    await p.screenshot({ path: `${OUT}/44-desktop-street1.png` });
     l = await solve(p, 'mouse');
     check('Компьютер: улица проходится мышью', l.state === 'won' && l.moves === l.minTaps);
     check('Компьютер: без ошибок', e.length === 0, e.join(' | '));

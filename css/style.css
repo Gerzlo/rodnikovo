@@ -53,4 +53,12 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .card .row{display:flex;gap:10px;margin-top:6px}
 .tag{align-self:center;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--water-deep);background:#e1edfa;border-radius:999px;padding:4px 10px}
 .toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,32,26,.88);color:#fff;font-weight:800;font-size:14px;border-radius:999px;padding:8px 14px;white-space:nowrap}
-@media (prefers-reduced-motion:reduce){.btn,.bar i,.mv-stars i{transition:none}}
+/* Телефон боком: игру закрываем заставкой и просим повернуть — Родниково только вертикальная.
+   Срабатывает только на сенсорном экране высотой до 500 px: компьютер и планшет не задевает. */
+.rotate{display:none;position:fixed;inset:0;z-index:50;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--pine);color:var(--on-pine)}
+.rotate b{font-family:var(--display);font-weight:700;font-size:20px}
+.rotate span{font-size:14px;font-weight:700;color:var(--on-pine-soft)}
+.rotate .ph{transform-box:fill-box;transform-origin:center;animation:tilt 2.6s ease-in-out infinite}
+@keyframes tilt{0%,25%{transform:rotate(-90deg)}55%,100%{transform:rotate(0deg)}}
+@media (orientation:landscape) and (pointer:coarse) and (max-height:500px){.rotate{display:flex}}
+@media (prefers-reduced-motion:reduce){.btn,.bar i,.mv-stars i{transition:none}.rotate .ph{animation:none}}

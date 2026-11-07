@@ -15,6 +15,8 @@ const ov=$('ov'),ovTag=$('ovTag'),ovStars=$('ovStars'),ovT=$('ovT'),ovP=$('ovP')
 const tTitle=$('tTitle'),tSub=$('tSub'),tScore=$('tScore'),btnBack=$('btnBack');
 const movesBox=$('movesBox'),mvStars=$('mvStars'),mvBar=$('mvBar'),mvFill=$('mvFill'),mvLeft=$('mvLeft');
 const mapBar=$('mapBar'),lvlBar=$('lvlBar'),btnPlay=$('btnPlay'),btnRestart=$('btnRestart'),btnHint=$('btnHint'),toastEl=$('toast');
+// Телефон боком: на экране заставка «Поверни телефон» (css/style.css), игру в это время не рисуем.
+const sideways=matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
 
 G.now=performance.now();
 G.stars=platform.loadStars(LEVELS.length);
@@ -185,6 +187,7 @@ window.__rodnikovo={
 /* ---------- главный цикл ---------- */
 let last=performance.now();
 function loop(t){
+  if(sideways.matches){last=t;requestAnimationFrame(loop);return;}
   const t0=performance.now();
   gapBuf.push(t-last);if(gapBuf.length>300)gapBuf.shift();
   const dt=Math.min(0.05,(t-last)/1000);last=t;G.now=t;
