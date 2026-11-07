@@ -1,0 +1,56 @@
+/* Одноэкранная игра: шапка (название и ходы), сцена-канвас, кнопки под большой палец. Один дневной мир. */
+:root{
+  --pine:#1d3a2d; --pine-2:#28503d; --cream:#fbf6ea; --cream-line:#e0d3b5;
+  --ink:#24322b; --ink-soft:#5a6a60; --water:#2a7fd6; --water-deep:#1b5fa8; --gold:#ffc83d;
+  --on-pine:#f3eedf; --on-pine-soft:#a9bdb0;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --body:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;overscroll-behavior:none}
+body{
+  margin:0;background:var(--pine);color:var(--on-pine);font-family:var(--body);font-size:14px;
+  box-sizing:border-box;overflow:hidden;
+  padding-top:calc(8px + env(safe-area-inset-top,0px));
+  padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation;
+}
+.app{height:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.top{display:flex;align-items:center;gap:10px;min-height:48px}
+.title{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.title b{font-family:var(--display);font-weight:700;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title span{font-size:13px;color:var(--on-pine-soft);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font:inherit;font-weight:800;font-size:14px;color:var(--on-pine);background:var(--pine-2);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:9px 12px;cursor:pointer}
+.score{font-family:var(--display);font-size:14px;color:var(--gold);background:var(--pine-2);border-radius:12px;padding:9px 11px;white-space:nowrap}
+.moves{display:flex;align-items:center;gap:10px;background:var(--pine-2);border-radius:14px;padding:8px 12px}
+.mv-stars{color:var(--gold);font-size:17px;letter-spacing:1px;white-space:nowrap}
+.mv-stars i{font-style:normal;transition:opacity .2s}
+.mv-stars i.off{opacity:.2}
+.bar{flex:1;height:10px;border-radius:6px;background:rgba(0,0,0,.28);overflow:hidden}
+.bar i{display:block;height:100%;width:100%;background:#4aa3f0;border-radius:6px;transition:width .2s,background .2s}
+.bar.low i{background:#ef7a55}
+.mv-num{font-family:var(--display);font-size:17px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mv-num small{font-family:var(--body);font-size:12px;color:var(--on-pine-soft);font-weight:700;margin-right:5px}
+.stage{flex:1;min-height:0;position:relative;border-radius:20px;overflow:hidden;background:#86c461}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.bottom{display:flex}
+.bottom > div{display:flex;gap:10px;flex:1}
+.btn{flex:1;font:inherit;font-weight:800;font-size:16px;line-height:1.15;border:0;border-radius:16px;padding:13px 14px;cursor:pointer;color:#fff;background:var(--water);box-shadow:0 3px 0 var(--water-deep)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--water-deep)}
+.btn.ghost{background:var(--cream);color:var(--ink);box-shadow:0 3px 0 var(--cream-line)}
+.btn small{display:block;font-size:11px;font-weight:700;opacity:.6;margin-top:2px}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(18,38,28,.5)}
+.card{background:var(--cream);color:var(--ink);border-radius:22px;padding:22px 20px 18px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px;text-align:center;box-shadow:0 10px 0 rgba(0,0,0,.14)}
+.card h2{font-family:var(--display);font-weight:700;font-size:20px;line-height:1.25;margin:0;text-wrap:balance}
+.card p{margin:0;font-size:15.5px;line-height:1.45;color:var(--ink-soft);font-weight:700}
+.big-stars{font-size:40px;letter-spacing:6px;color:var(--gold);line-height:1}
+.big-stars .off{color:#ddd2b7}
+.card .row{display:flex;gap:10px;margin-top:6px}
+.tag{align-self:center;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--water-deep);background:#e1edfa;border-radius:999px;padding:4px 10px}
+.toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,32,26,.88);color:#fff;font-weight:800;font-size:14px;border-radius:999px;padding:8px 14px;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.btn,.bar i,.mv-stars i{transition:none}}

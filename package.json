@@ -1,0 +1,16 @@
+{
+  "name": "rodnikovo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Родниково — головоломка с трубами для Яндекс Игр",
+  "scripts": {
+    "test": "node tests/generator.test.js && node tests/playtest.js",
+    "test:gen": "node tests/generator.test.js",
+    "test:play": "node tests/playtest.js",
+    "serve": "node tests/serve.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

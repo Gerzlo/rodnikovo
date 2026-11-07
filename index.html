@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d3a2d">
+<title>Родниково</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="chip" id="btnBack" type="button" hidden>← Карта</button>
+    <div class="title"><b id="tTitle">Родниково</b><span id="tSub">Посёлок ждёт воду</span></div>
+    <div class="score" id="tScore">★ 0</div>
+  </header>
+  <div class="moves" id="movesBox" hidden>
+    <div class="mv-stars" id="mvStars"><i>★</i><i>★</i><i>★</i></div>
+    <div class="bar" id="mvBar"><i id="mvFill"></i></div>
+    <div class="mv-num"><small>ходов</small><span id="mvLeft">0</span></div>
+  </div>
+  <main class="stage" id="stage">
+    <canvas id="cv" aria-label="Игровое поле"></canvas>
+    <div class="toast" id="toast" hidden></div>
+    <div class="ov" id="ov" hidden>
+      <div class="card">
+        <span class="tag" id="ovTag" hidden></span>
+        <div class="big-stars" id="ovStars" hidden></div>
+        <h2 id="ovT"></h2>
+        <p id="ovP"></p>
+        <div class="row"><button class="btn ghost" id="ovB2" type="button"></button><button class="btn" id="ovB1" type="button"></button></div>
+      </div>
+    </div>
+  </main>
+  <footer class="bottom">
+    <div id="mapBar"><button class="btn" id="btnPlay" type="button">Играть</button></div>
+    <div id="lvlBar" hidden>
+      <button class="btn ghost" id="btnRestart" type="button">Заново</button>
+      <button class="btn ghost" id="btnHint" type="button">Подсказка<small>за рекламу</small></button>
+    </div>
+  </footer>
+</div>
+</body>
+</html>
