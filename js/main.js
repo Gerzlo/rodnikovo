@@ -15,6 +15,9 @@ const ov=$('ov'),ovTag=$('ovTag'),ovStars=$('ovStars'),ovT=$('ovT'),ovP=$('ovP')
 const tTitle=$('tTitle'),tSub=$('tSub'),tScore=$('tScore'),btnBack=$('btnBack');
 const movesBox=$('movesBox'),mvStars=$('mvStars'),mvBar=$('mvBar'),mvFill=$('mvFill'),mvLeft=$('mvLeft');
 const mapBar=$('mapBar'),lvlBar=$('lvlBar'),btnPlay=$('btnPlay'),btnRestart=$('btnRestart'),btnHint=$('btnHint'),toastEl=$('toast');
+// iPhone: запрет масштабирования щипком. В режиме «На экран Домой» увеличенный масштаб иначе «залипает»
+// (после поворота телефона или случайного щипка) — шапка уезжает под строку со временем, края обрезаются.
+for(const ev of ['gesturestart','gesturechange','gestureend'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 // Телефон боком: на экране заставка «Поверни телефон» (css/style.css), игру в это время не рисуем.
 const sideways=matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
 

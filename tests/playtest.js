@@ -89,6 +89,11 @@ try {
   const errors = watchErrors(page);
   await page.goto(URL); await sleep(800);
   check('Карта открывается', (await H(page, 'screen')) === 'map');
+  {
+    // Режим «На экран Домой» на iPhone здесь не воспроизвести — проверяем, что защита от залипшего масштаба на месте.
+    const vp = await page.getAttribute('meta[name="viewport"]', 'content');
+    check('Масштаб страницы заблокирован (для iPhone «На экран Домой»)', /maximum-scale=1(,|$)/.test(vp) && /user-scalable=no/.test(vp), vp);
+  }
   await page.screenshot({ path: `${OUT}/01-map-start.png` });
   {
     const n = (await H(page, 'mapNodes'))[3], b = await box(page);
