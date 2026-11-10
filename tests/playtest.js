@@ -15,7 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results');
 fs.mkdirSync(OUT, { recursive: true });
 const SAVE_KEY = 'rodnikovo-save-1';
-const ALL_BUT_LAST = JSON.stringify({ stars: [3, 3, 3, 3, 3, 3, 3, 3, 3, 0] });
+const ALL_BUT_LAST = JSON.stringify({ stars: [...Array(19).fill(3), 0] }); // открыта последняя, самая большая улица
+const LEAF = { w: 'house', e: 'lamp', g: 'greenhouse' };
 // Известные проблемы: { ключ: 'когда исправим' }. Сейчас таких нет.
 const KNOWN = {};
 
@@ -63,8 +64,28 @@ async function startIntroIfAny(page, mode) {
   await sleep(350);
 }
 async function openFromMap(page, mode) { await press(page, '#btnPlay', mode); await startIntroIfAny(page, mode); }
+// Провести пальцем по экрану (касание через протокол Chrome: Playwright умеет только тап).
+// В конце палец замирает, чтобы карта не уехала по инерции.
+const cdps = new WeakMap();
+async function swipe(page, x, y0, y1, steps = 8) {
+  if (!cdps.has(page)) cdps.set(page, await page.context().newCDPSession(page));
+  const cdp = cdps.get(page), T = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: y == null ? [] : [{ x, y }] });
+  await T('touchStart', y0);
+  for (let k = 1; k <= steps; k++) { await T('touchMove', y0 + (y1 - y0) * k / steps); await sleep(16); }
+  await sleep(130); await T('touchEnd'); await sleep(120);
+}
+// Улица на карте: если точка за краем экрана — прокручиваем карту пальцем, потом нажимаем.
+async function showNode(page, i) {
+  for (let t = 0; t < 10; t++) {
+    const n = (await H(page, 'mapNodes'))[i];
+    if (n.vis) return n;
+    const b = await box(page), dy = Math.max(-b.height * 0.6, Math.min(b.height * 0.6, b.height / 2 - n.y));
+    await swipe(page, b.x + b.width * 0.12, b.y + b.height / 2 - dy / 2, b.y + b.height / 2 + dy / 2);
+  }
+  return (await H(page, 'mapNodes'))[i];
+}
 async function tapNode(page, i) {
-  const n = (await H(page, 'mapNodes'))[i], b = await box(page);
+  const n = await showNode(page, i), b = await box(page);
   await page.touchscreen.tap(b.x + n.x, b.y + n.y);
   await startIntroIfAny(page, 'touch');
 }
@@ -76,7 +97,7 @@ const wrongCount = lv => lv.cells.filter(c => c.taps > 0).length;
 
 const server = await serve();
 const URL = server.url + 'index.html';
-const guard = setTimeout(() => { console.error('ТЕСТ ЗАВИС: больше 8 минут'); process.exit(1); }, 8 * 60 * 1000);
+const guard = setTimeout(() => { console.error('ТЕСТ ЗАВИС: больше 12 минут'); process.exit(1); }, 12 * 60 * 1000);
 guard.unref();
 
 try {
@@ -101,6 +122,18 @@ try {
     const t = (await page.isVisible('#toast')) ? await page.textContent('#toast') : '';
     check('Закрытая улица не открывается и объясняет почему', (await H(page, 'screen')) === 'map' && t.startsWith('Сначала'), t);
   }
+  {
+    // Карта длиннее экрана: тянем пальцем вниз — открывается верхняя часть посёлка. Сдвиг пальца — не нажатие.
+    const b = await box(page), n0 = (await H(page, 'mapNodes'))[0], cy0 = await H(page, 'mapScroll');
+    await swipe(page, b.x + n0.x, b.y + n0.y, b.y + n0.y + b.height * 0.5);
+    const cy1 = await H(page, 'mapScroll');
+    check('Карта прокручивается пальцем', cy1 < cy0 - 100, `верх экрана на карте: ${Math.round(cy0)} → ${Math.round(cy1)}`);
+    check('Палец начал на открытой улице и сдвинулся — улица не открывается', (await H(page, 'screen')) === 'map' && !(await page.isVisible('#ov')));
+    const n19 = await showNode(page, 19);
+    check('Прокруткой можно добраться до последней улицы', n19.vis);
+    await page.screenshot({ path: `${OUT}/03-map-top.png` });
+    await showNode(page, 0);
+  }
   const total = (await H(page, 'stars')).length;
   for (let i = 0; i < total; i++) {
     await openFromMap(page, 'touch');
@@ -108,13 +141,17 @@ try {
     const street = (await page.textContent('#tTitle')).replace('ул. ', '');
     check(`Ул. ${i + 1} «${street}» открылась`, lv && lv.index === i && lv.moves === 0 && lv.state === 'play' && !lv.solved,
       lv ? `${lv.W}×${lv.H}, минимум ${lv.minTaps} ходов, лимит ${lv.limit}` : 'нет уровня');
-    const fixed = lv.cells.filter(c => c.locked || c.type === 'house' || c.type === 'lamp' || c.type === 'src').slice(0, 4);
+    {
+      const bad = lv.nets.filter(n => lv.cells.filter(c => c.type === 'src' && c.net === n).length !== 1 || lv.cells.filter(c => c.type === LEAF[n]).length < 2);
+      check(`Ул. ${i + 1}: у каждой сети (${lv.nets.join('+')}) один источник и не меньше двух потребителей`, bad.length === 0, bad.join(','));
+    }
+    const fixed = lv.cells.filter(c => c.locked || c.type === 'house' || c.type === 'lamp' || c.type === 'greenhouse' || c.type === 'src').slice(0, 5);
     for (const c of fixed) await tapCell(page, lv, c, 'touch');
     check(`Ул. ${i + 1}: дома, источники и трубы с замком не крутятся и ходы не тратят`, (await H(page, 'level')).moves === 0);
-    if ([0, 5, 7, 8].includes(i)) await page.screenshot({ path: `${OUT}/1${i}-street${i + 1}-start.png` });
+    if ([0, 5, 7, 8, 12, 15, 19].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
     lv = await solve(page, 'touch');
     check(`Ул. ${i + 1}: решена за минимум ходов`, lv.state === 'won' && lv.solved && lv.moves === lv.minTaps, `ходов ${lv.moves}`);
-    if (i === total - 1) { await sleep(1000); await page.screenshot({ path: `${OUT}/19-street${i + 1}-solved.png` }); }
+    if ([12, 15, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
     const st = await winStars(page), title = await page.textContent('#ovT');
     check(`Ул. ${i + 1}: окно победы, 3 звезды`, st === 3 && title.includes(street), title);
     await page.tap('#ovB1'); await sleep(400);
@@ -234,9 +271,9 @@ try {
 
   /* 8. Маленькие телефоны и планшет боком */
   for (const [dev, shot, min] of [
-    ['iPhone SE', '40-small-street10', 40],
+    ['iPhone SE', '40-small-street20', 40],
     ['Galaxy S8', null, 44],
-    ['iPad (gen 7) landscape', '42-tablet-street10', 44],
+    ['iPad (gen 7) landscape', '42-tablet-street20', 44],
   ]) {
     if (!devices[dev]) { console.log(`  --  ${dev}: такого устройства нет в Playwright, пропуск`); continue; }
     const c = await browser.newContext({ ...devices[dev] });
@@ -279,6 +316,13 @@ try {
     await p.goto(URL); await sleep(700);
     check('Компьютер: заставка «Поверни телефон» не появляется', !(await p.isVisible('#rotate')));
     await p.screenshot({ path: `${OUT}/43-desktop-map.png` });
+    {
+      const b = await box(p), cy0 = await H(p, 'mapScroll');
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.wheel(0, -600); await sleep(200);
+      const cy1 = await H(p, 'mapScroll');
+      await p.mouse.wheel(0, 3000); await sleep(200);
+      check('Компьютер: карта прокручивается колесом мыши', cy1 < cy0 - 100 && Math.abs((await H(p, 'mapScroll')) - cy0) < 1, `${Math.round(cy0)} → ${Math.round(cy1)} → обратно`);
+    }
     await openFromMap(p, 'mouse');
     let l = await H(p, 'level');
     await tapCell(p, l, l.cells.find(x => x.type === 'pipe' && !x.locked), 'mouse', 'right');

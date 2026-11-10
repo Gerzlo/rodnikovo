@@ -1,11 +1,11 @@
 // Главный модуль: экраны, кнопки, касания, ход игры и главный цикл.
-import { DX, DY, tapsToSolve, evaluate, generate } from './core.js';
+import { DX, DY, tapsToSolve, evaluate, generate, isLeaf } from './core.js';
 import { LEVELS } from './levels.js';
 import { G, B, M, unlocked, currentIdx } from './state.js';
 import { setCtx } from './art.js';
 import { spawn, updParts, drawPart } from './fx.js';
 import { layoutLevel, drawLevel } from './board.js';
-import { NODES, DISTRICTS, drawMap, nodeAt } from './map.js';
+import { NODES, DISTRICTS, drawMap, nodeAt, mapFocus, mapGrab, mapDrag, mapRelease, mapWheel, updMap } from './map.js';
 import { platform } from './platform.js';
 
 const $=id=>document.getElementById(id);
@@ -25,6 +25,9 @@ G.now=performance.now();
 G.stars=platform.loadStars(LEVELS.length);
 function save(){platform.saveStars(G.stars);}
 const genCache=[];
+// Какие сети на улице — словами: «вода», «вода и газ», «вода, свет и газ».
+const NET_WORD={w:'вода',e:'свет',g:'газ'};
+function netsText(nets){const w=nets.map(n=>NET_WORD[n]);return w.length<2?w[0]:w.slice(0,-1).join(', ')+' и '+w[w.length-1];}
 function levelData(i){if(!genCache[i])genCache[i]=generate(LEVELS[i]);return genCache[i];}
 
 /* ---------- ход игры ---------- */
@@ -78,15 +81,15 @@ function win(r){
   if(first)G.mapAnim={i:li,t0:0};
   const S=B.S;
   for(const c of L.cells){
-    if(!(c.type==='house'||c.type==='lamp'||c.type==='src'))continue;
+    if(!(isLeaf(c.type)||c.type==='src'))continue;
     const s=c.segs[0],px=B.x+(c.x+0.5)*S,py=B.y+(c.y+0.3)*S;
     for(let k=0;k<9;k++)spawn(G.parts,{k:'star',x:px,y:py,vx:(Math.random()-0.5)*130,vy:-70-Math.random()*130,g:170,life:1,max:1,r:3+Math.random()*4,c:['#ffd34d','#ffffff','#7cc4ff'][k%3],delay:Math.max(0,s.depth)*0.075+Math.random()*0.15});
   }
   setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='won')showWin(st);},950+r.maxDepth*75);
 }
 function showWin(st){
-  const L=G.L,li=G.li,moves=G.moves,nets=L.nets.length>1;
-  showOverlay({stars:st,title:`ул. ${LEVELS[li].name}: ${nets?'вода и свет есть':'вода есть'}!`,
+  const L=G.L,li=G.li,moves=G.moves;
+  showOverlay({stars:st,title:`ул. ${LEVELS[li].name}: ${netsText(L.nets)} есть!`,
     text:st===3?`Ходов: ${moves}. Идеально!`:`Ходов: ${moves}. На три звезды нужно не больше ${L.t3}.`,
     b1:{label:'На карту',fn:goMap},b2:{label:'Ещё раз',fn:()=>startLevel(li)}});
 }
@@ -103,7 +106,7 @@ function openLevel(i){
   else startLevel(i);
 }
 function goMap(){
-  G.screen='map';G.parts=[];
+  G.screen='map';G.parts=[];mapFocus(G.li,true);
   const ma=G.mapAnim;
   if(ma&&!ma.t0){
     ma.t0=G.now+350;const [ax,ay]=DISTRICTS[ma.i];
@@ -140,7 +143,7 @@ function updateHud(){
   }else{
     const L=G.L,li=G.li;
     tTitle.textContent='ул. '+LEVELS[li].name;
-    tSub.textContent=`Улица ${li+1} из ${LEVELS.length} · ${L.nets.length>1?'вода и свет':'вода'}`;
+    tSub.textContent=`Улица ${li+1} · ${netsText(L.nets)}`;
     tScore.textContent=stars[li]?'★ '+stars[li]+'/3':'★ —';
     const left=Math.max(0,L.limit-G.moves);
     mvLeft.textContent=left;mvFill.style.width=(left/L.limit*100)+'%';mvBar.classList.toggle('low',left<=3);
@@ -155,14 +158,34 @@ btnHint.addEventListener('click',()=>{
   if(G.screen!=='level'||L.state!=='play')return;
   fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='play')return;const c=pickHint();if(!c)return;const t=tapsToSolve(c);c.turns+=t;c.rot=c.turns&3;c.hintAt=G.now;G.tut=-1;afterChange();});
 });
+// На улице труба поворачивается сразу при касании. На карте касание открывает улицу, только если палец
+// не сдвинулся: сдвиг — это прокрутка карты.
+let drag=null;
+const local=e=>{const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
 cv.addEventListener('pointerdown',e=>{
   if(!ov.hidden||e.button>0)return;
-  const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  const [px,py]=local(e);
   if(G.screen==='level'){tapLevel(px,py);return;}
-  const i=nodeAt(px,py);
-  if(i<0)return;
-  if(unlocked(i))openLevel(i);else toast('Сначала проведи воду на ул. '+LEVELS[i-1].name);
+  drag={id:e.pointerId,px,py,moved:false};mapGrab(py);
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
 });
+cv.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id||G.screen!=='map')return;
+  const [px,py]=local(e);
+  if(!drag.moved&&Math.hypot(px-drag.px,py-drag.py)>8)drag.moved=true;
+  if(drag.moved)mapDrag(py);
+});
+function endDrag(e,cancel){
+  if(!drag||e.pointerId!==drag.id)return;
+  const d=drag;drag=null;mapRelease();
+  if(cancel||d.moved||G.screen!=='map'||!ov.hidden)return;
+  const i=nodeAt(d.px,d.py);
+  if(i<0)return;
+  if(unlocked(i))openLevel(i);else toast('Сначала пройди ул. '+LEVELS[i-1].name);
+}
+cv.addEventListener('pointerup',e=>endDrag(e,false));
+cv.addEventListener('pointercancel',e=>endDrag(e,true));
+cv.addEventListener('wheel',e=>{if(G.screen!=='map')return;e.preventDefault();mapWheel(e.deltaY*(e.deltaMode===1?16:1));},{passive:false});
 
 function fit(){
   const r=stage.getBoundingClientRect();G.VW=Math.max(1,r.width);G.VH=Math.max(1,r.height);
@@ -178,11 +201,12 @@ const stat=a=>{if(!a.length)return null;const s=a.slice().sort((p,q)=>p-q);retur
 window.__rodnikovo={
   screen:()=>G.screen,
   stars:()=>G.stars.slice(),
-  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
+  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
     solved:!!(L.res&&L.res.solved),leaks:L.res?L.res.leaks.length:0,conflicts:L.res?L.res.conflicts.length:0,
     board:{x:B.x,y:B.y,S:B.S},
-    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,locked:c.locked,shared:c.shared,taps:c.type==='pipe'&&!c.locked?tapsToSolve(c):0}))}:null;},
-  mapNodes:()=>NODES.map(([x,y])=>({x:M.ox+x*M.sc,y:M.oy+y*M.sc})),
+    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,taps:c.type==='pipe'&&!c.locked?tapsToSolve(c):0}))}:null;},
+  mapNodes:()=>NODES.map(([x,y])=>{const sx=M.ox+x*M.sc,sy=M.oy+y*M.sc;return {x:sx,y:sy,vis:sx>20&&sx<G.VW-20&&sy>24&&sy<G.VH-24};}),
+  mapScroll:()=>M.cy,
   frame:()=>({work:stat(perfBuf),gap:stat(gapBuf)}),
   resetFrame:()=>{perfBuf.length=0;gapBuf.length=0;}
 };
@@ -201,12 +225,14 @@ function loop(t){
       for(const s of c.segs){if(s.reached){if(G.now>=s.fillAt)s.f=Math.min(1,s.f+dt/0.16);}else s.f=Math.max(0,s.f-dt/0.12);}
     }
     if(L.state==='play'&&L.res)for(const lk of L.res.leaks){
-      if(Math.random()>dt*(lk.net==='w'?9:6))continue;
+      if(Math.random()>dt*(lk.net==='w'?9:lk.net==='g'?5:6))continue;
       const S=B.S,px=B.x+(lk.x+0.5+DX[lk.d]*0.5)*S,py=B.y+(lk.y+0.5+DY[lk.d]*0.5)*S;
       if(lk.net==='w')spawn(G.parts,{k:'drop',x:px,y:py,vx:DX[lk.d]*70+(Math.random()-0.5)*50,vy:DY[lk.d]*70-40-Math.random()*40,g:260,life:0.55,max:0.55,r:1.6+Math.random()*1.8});
+      else if(lk.net==='g')spawn(G.parts,{k:'puff',x:px,y:py,vx:DX[lk.d]*26+(Math.random()-0.5)*14,vy:DY[lk.d]*26-12-Math.random()*10,life:0.9,max:0.9,r:S*0.035+Math.random()*S*0.02});
       else spawn(G.parts,{k:'spark',x:px,y:py,vx:(Math.random()-0.5)*220,vy:(Math.random()-0.5)*220,life:0.22,max:0.22});
     }
   }
+  if(G.screen==='map')updMap(dt);
   G.parts=updParts(G.parts,dt);G.mparts=updParts(G.mparts,dt);
   ctx.setTransform(G.DPR,0,0,G.DPR,0,0);
   if(G.screen==='level'&&L){drawLevel();for(const p of G.parts)drawPart(p);}else drawMap();

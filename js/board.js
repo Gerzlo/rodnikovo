@@ -1,9 +1,11 @@
 // Поле улицы: плитки, трубы и провода, отрисовка улицы и её раскладка на экране.
-import { DX, DY, BIT, isCorner, bitCount, mulberry32 } from './core.js';
-import { ctx, mixH, rrect, circ, ell, badge, drawLock, drawInCell, drawTuft, drawFlowers } from './art.js';
+import { DX, DY, BIT, isCorner, bitCount, mulberry32, isLeaf } from './core.js';
+import { ctx, mixH, rrect, circ, ell, badge, flamePath, drawLock, drawInCell, drawTuft, drawFlowers } from './art.js';
 import { G, B } from './state.js';
 
 /* ---------- трубы ---------- */
+// Толщина трубы по сети (доля клетки) и порядок рисования: провод всегда сверху, газ — над водой.
+const TUBE_W={w:0.25,g:0.2,e:0.15},ORDER={w:0,g:1,e:2};
 // Тени и блики считаются в экранных координатах, поэтому при повороте клетки свет падает с одной стороны.
 let curAng=0;
 function offv(dx,dy){const c=Math.cos(-curAng),s=Math.sin(-curAng);return [dx*c-dy*s,dx*s+dy*c];}
@@ -33,6 +35,13 @@ function drawTube(p,w,net,f){
     ctx.strokeStyle=mixH('#a9b6c2','#3d97ea',f);ctx.lineWidth=w*0.72;ctx.stroke(p);
     strokeOff(p,-w*0.1,-w*0.13,`rgba(255,255,255,${0.55-0.12*f})`,w*0.18);
     if(f>0.05){ctx.save();ctx.setLineDash([w*0.32,w*0.8]);ctx.lineDashOffset=-now*0.045;ctx.strokeStyle=`rgba(215,242,255,${0.6*f})`;ctx.lineWidth=w*0.2;ctx.stroke(p);ctx.restore();}
+  }else if(net==='g'){
+    // газовая труба: оранжевая, с тёмными кольцами-метками; газ «течёт» медленными бликами
+    ctx.strokeStyle=mixH('#6b5446','#9c3f0c',f);ctx.lineWidth=w;ctx.stroke(p);
+    ctx.strokeStyle=mixH('#c9a68a','#f58a2e',f);ctx.lineWidth=w*0.7;ctx.stroke(p);
+    ctx.save();ctx.setLineDash([w*0.17,w*1.05]);ctx.strokeStyle=mixH('#7b6250','#8f3a0a',f);ctx.lineWidth=w;ctx.stroke(p);ctx.restore();
+    strokeOff(p,-w*0.1,-w*0.13,`rgba(255,255,255,${0.5-0.15*f})`,w*0.16);
+    if(f>0.05){ctx.save();ctx.setLineDash([w*0.5,w*1.6]);ctx.lineDashOffset=-now*0.03;ctx.strokeStyle=`rgba(255,236,200,${0.55*f})`;ctx.lineWidth=w*0.22;ctx.stroke(p);ctx.restore();}
   }else{
     if(f>0.05){ctx.save();ctx.shadowColor=`rgba(255,196,40,${0.9*f})`;ctx.shadowBlur=w*1.3;ctx.strokeStyle=mixH('#2b3038','#9a6a0e',f);ctx.lineWidth=w;ctx.stroke(p);ctx.restore();}
     else{ctx.strokeStyle='#2b3038';ctx.lineWidth=w;ctx.stroke(p);}
@@ -41,18 +50,20 @@ function drawTube(p,w,net,f){
     if(f>0.05){ctx.save();ctx.setLineDash([w*0.25,w*1.8]);ctx.lineDashOffset=-now*0.09;ctx.strokeStyle=`rgba(255,255,235,${0.95*f})`;ctx.lineWidth=w*0.32;ctx.stroke(p);ctx.restore();}
   }
 }
+const FIT={w:[1.36,'#c99a4b','#7d5a26'],e:[1.75,'#3a3f47','#22262c'],g:[1.4,'#8c7b6e','#4f4038']};
 function drawFittings(s,w,S,h,hub){
   const ft=S*0.075;
   for(let d=0;d<4;d++){
     if(!(s.mask&BIT[d]))continue;
     const cx=DX[d]*(h-ft/2),cy=DY[d]*(h-ft/2),ns=d%2===0;
-    const aw=s.net==='w'?w*1.36:w*1.75;
+    const k=FIT[s.net],aw=w*k[0];
     const rw=ns?aw:ft,rh=ns?ft:aw;
-    ctx.fillStyle=s.net==='w'?'#c99a4b':'#3a3f47';rrect(cx-rw/2,cy-rh/2,rw,rh,Math.min(rw,rh)*0.35);ctx.fill();
-    ctx.strokeStyle=s.net==='w'?'#7d5a26':'#22262c';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle=k[1];rrect(cx-rw/2,cy-rh/2,rw,rh,Math.min(rw,rh)*0.35);ctx.fill();
+    ctx.strokeStyle=k[2];ctx.lineWidth=1;ctx.stroke();
   }
   if(hub){
     if(s.net==='w'){circ(0,0,w*0.68,'#7d5a26');circ(0,0,w*0.58,'#cfa152');const o=offv(-w*0.15,-w*0.18);circ(o[0],o[1],w*0.2,'rgba(255,255,255,.45)');}
+    else if(s.net==='g'){circ(0,0,w*0.72,'#6e3410');circ(0,0,w*0.6,s.f>0.5?'#f39a4a':'#b9957a');const o=offv(-w*0.15,-w*0.18);circ(o[0],o[1],w*0.2,'rgba(255,255,255,.45)');}
     else{ctx.fillStyle='#262a30';rrect(-w*0.85,-w*0.85,w*1.7,w*1.7,w*0.35);ctx.fill();circ(0,0,w*0.35,s.f>0.5?'#ffd24a':'#5f6772');}
   }
 }
@@ -62,13 +73,13 @@ function drawCellPipes(c,x0,y0,S){
   let ang=c.anim;if(c.wig){const t=(G.now-c.wig)/320;if(t<1)ang+=Math.sin(t*Math.PI*6)*0.13*(1-t);}
   ctx.rotate(ang);curAng=ang;
   ctx.beginPath();ctx.rect(-h,-h,S,S);ctx.clip();
-  const segs=c.segs.slice().sort((a,b)=>(a.net==='w'?0:1)-(b.net==='w'?0:1));
-  const leaf=c.type==='house'||c.type==='lamp';
-  for(const s of segs){
+  const segs=c.segs.slice().sort((a,b)=>ORDER[a.net]-ORDER[b.net]);
+  const leaf=isLeaf(c.type);
+  for(const [i,s] of segs.entries()){
     const be=leaf?[0,1,2,3].find(d=>s.mask&BIT[d]):(s.entry>=0?((s.entry-c.rot)&3):-1);
     const p=segPath(s.mask,be,h);
-    const w=s.net==='w'?S*0.25:S*0.15;
-    if(c.shared==='bridge'&&s.net==='e')strokeOff(p,S*0.06,S*0.11,'rgba(10,30,10,.35)',w*1.7);
+    const w=S*TUBE_W[s.net];
+    if(c.shared==='bridge'&&i>0)strokeOff(p,S*0.06,S*0.11,'rgba(10,30,10,.35)',w*1.7);
     drawTube(p,w,s.net,s.f);
     drawFittings(s,w,S,h,bitCount(s.mask)>=3&&c.type!=='src');
   }
@@ -79,8 +90,10 @@ function drawCellPipes(c,x0,y0,S){
 // Клетка источника окрашена в цвет своей сети, чтобы её не путали с домами.
 const SRC_TILE={
   w:{bevel:'#2f6fae',top:'#a6d6fa',bot:'#74b9ef',rim:'rgba(255,255,255,.75)'},
-  e:{bevel:'#a8790f',top:'#ffe07a',bot:'#f6c03a',rim:'rgba(255,255,255,.7)'}
+  e:{bevel:'#a8790f',top:'#ffe07a',bot:'#f6c03a',rim:'rgba(255,255,255,.7)'},
+  g:{bevel:'#b4531a',top:'#ffd2a0',bot:'#f7a55a',rim:'rgba(255,255,255,.72)'}
 };
+const SRC_OBJ={w:'tower',e:'tp',g:'gastank'};
 function drawSourceTile(net,x,y,S,g,r){
   const p=SRC_TILE[net],w=S-2*g,h=S-2*g-1.5;
   ctx.fillStyle=p.bevel;rrect(x+g,y+g+2.5,w,S-2*g,r);ctx.fill();
@@ -93,6 +106,9 @@ function drawSourceTile(net,x,y,S,g,r){
       const px=x+S*wx,py=y+S*wy,a=S*0.06;
       ctx.beginPath();ctx.moveTo(px-a*1.5,py);ctx.quadraticCurveTo(px-a*0.75,py-a*0.7,px,py);ctx.quadraticCurveTo(px+a*0.75,py+a*0.7,px+a*1.5,py);ctx.stroke();
     }
+  }else if(net==='g'){
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    for(const [fx,fy] of [[0.18,0.22],[0.82,0.22],[0.18,0.8],[0.82,0.8]]){flamePath(x+S*fx,y+S*fy,S*0.065);ctx.fill();}
   }else{
     const band=S*0.085;
     ctx.beginPath();ctx.rect(x,y,S,S);ctx.rect(x+g+band,y+g+band,w-2*band,h-2*band);ctx.clip('evenodd');
@@ -157,14 +173,15 @@ export function drawLevel(){
     const c=L.cells[y*W+x],x0=bx+x*S,y0=by+y*S;
     if(c.type==='house'){const s=c.segs[0];drawInCell('house',x0,y0,S,{v:c.v,ok:s.f>0.85,life:0.35+0.65*s.f});}
     else if(c.type==='lamp'){const s=c.segs[0];drawInCell('lamp',x0,y0,S,{on:s.f>0.85,f:s.f});}
-    else if(c.type==='src')drawInCell(c.segs[0].net==='w'?'tower':'tp',x0,y0,S,{on:true});
+    else if(c.type==='greenhouse'){const s=c.segs[0];drawInCell('greenhouse',x0,y0,S,{f:s.f,ok:s.f>0.85});}
+    else if(c.type==='src')drawInCell(SRC_OBJ[c.segs[0].net],x0,y0,S,{on:true});
     else if(c.type==='block')drawInCell(c.v%2?'rocks':(c.v%3===0?'pine':'tree'),x0,y0,S,{v:c.v});
     else if(c.type==='deco')drawInCell('bush',x0,y0,S,{v:c.v});
   }
   // метки поверх построек — всегда в правом верхнем углу клетки
   for(const c of L.cells){
     const x0=bx+c.x*S,y0=by+c.y*S;
-    if(c.type==='house'||c.type==='lamp')badge(x0+S*0.82,y0+S*0.18,S*0.1,c.type==='house'?'w':'e',c.segs[0].f>0.85);
+    if(isLeaf(c.type))badge(x0+S*0.82,y0+S*0.18,S*0.1,c.segs[0].net,c.segs[0].f>0.85);
     else if(c.type==='pipe'&&c.locked)drawLock(x0+S*0.8,y0+S*0.2,S);
   }
   if(res){

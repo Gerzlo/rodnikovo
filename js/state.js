@@ -14,7 +14,7 @@ export const G = {
   parts: [], mparts: [], // частицы на улице и на карте
 };
 export const B = { x: 0, y: 0, S: 40 };   // поле улицы: левый верхний угол и размер клетки
-export const M = { sc: 1, ox: 0, oy: 0 }; // карта: масштаб и сдвиг
+export const M = { sc: 1, ox: 0, oy: 0, cy: null, vel: 0, target: null }; // карта: масштаб, сдвиг, прокрутка (cy), инерция, цель
 
 export const unlocked = i => i === 0 || G.stars[i - 1] > 0;
 export function currentIdx() { for (let i = 0; i < LEVELS.length; i++) if (!G.stars[i]) return i; return LEVELS.length - 1; }

@@ -1,6 +1,10 @@
 // Логика игры без браузера: направления, повороты, генератор улиц и проверка соединений.
 // Работает и в браузере, и в Node — на этом построен тест генератора (tests/generator.test.js).
 
+// Сети: 'w' — вода (башня → дома), 'e' — электричество (подстанция → фонари), 'g' — газ (газгольдер → теплицы).
+export const LEAF = { w: 'house', e: 'lamp', g: 'greenhouse' };
+export const isLeaf = t => t === 'house' || t === 'lamp' || t === 'greenhouse';
+
 // Направления: 0 — север, 1 — восток, 2 — юг, 3 — запад. Маска клетки — набор открытых сторон (биты 1, 2, 4, 8).
 export const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0], BIT = [1, 2, 4, 8];
 export const opp = d => (d + 2) & 3;
@@ -62,7 +66,10 @@ function tryGen(cfg,rng){
     for(let k=0;k<60;k++){
       let x,y;
       if(nets.length===1){x=W>2?1+ri(W-2):ri(W);y=H>2?1+ri(H-2):ri(H);}
-      else{x=ri(W);const band=Math.max(1,Math.floor(H/3));y=net==='w'?H-1-ri(band):ri(band);}
+      else{ // первая сеть — внизу, вторая — вверху, третья — в середине поля
+        x=ri(W);const band=Math.max(1,Math.floor(H/3)),k=nets.indexOf(net);
+        y=k===0?H-1-ri(band):k===1?ri(band):band+ri(Math.max(1,H-2*band));
+      }
       const t=at(x,y);if(t&&t.type==='free'){c=t;break;}
     }
     if(!c)return null;
@@ -114,7 +121,7 @@ function tryGen(cfg,rng){
     if(c.type==='block')continue;
     if(!c.segs.length){c.type='deco';empty++;continue;}
     if(c.type==='src'){if(!c.segs[0].mask)return null;continue;}
-    if(c.segs.length===1&&bitCount(c.segs[0].mask)===1){c.type=c.segs[0].net==='w'?'house':'lamp';cons[c.segs[0].net]++;}
+    if(c.segs.length===1&&bitCount(c.segs[0].mask)===1){c.type=LEAF[c.segs[0].net];cons[c.segs[0].net]++;}
     else c.type='pipe';
   }
   const maxEmpty=cfg.maxEmpty!=null?cfg.maxEmpty:(nets.length>1?3:0);

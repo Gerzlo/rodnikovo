@@ -24,13 +24,15 @@ console.log(`Улицы игры: ${LEVELS.length - bad} из ${LEVELS.length} �
 // 2) случайные настройки
 const R = mulberry32(2026), groups = {};
 let built = 0;
+const PAIRS = [['w', 'e'], ['w', 'g'], ['e', 'g']], WORD = { w: 'вода', e: 'свет', g: 'газ' };
 for (let k = 0; k < N; k++) {
-  const two = R() < 0.6;
-  const w = two ? 5 + Math.floor(R() * 3) : 4 + Math.floor(R() * 4);
-  const h = two ? 5 + Math.floor(R() * 4) : 4 + Math.floor(R() * 5);
-  const cfg = { w, h, nets: two ? ['w', 'e'] : ['w'], seed: 1 + Math.floor(R() * 1e6), blocks: Math.floor(R() * 3), locked: Math.floor(R() * 3) };
-  if (two) { cfg.bridges = Math.floor(R() * 3); cfg.doubles = Math.floor(R() * 3); }
-  const key = two ? `вода+свет, мостиков ${cfg.bridges}, двойных ${cfg.doubles}` : 'только вода';
+  const r = R(), nets = r < 0.25 ? ['w'] : r < 0.65 ? PAIRS[Math.floor(R() * 3)] : ['w', 'e', 'g'];
+  const many = nets.length > 1;
+  const w = many ? 5 + Math.floor(R() * 2) : 4 + Math.floor(R() * 3);
+  const h = many ? 5 + Math.floor(R() * 4) : 4 + Math.floor(R() * 5);
+  const cfg = { w, h, nets, seed: 1 + Math.floor(R() * 1e6), blocks: Math.floor(R() * 3), locked: Math.floor(R() * 3) };
+  if (many) { cfg.bridges = Math.floor(R() * 3); cfg.doubles = Math.floor(R() * 3); }
+  const key = nets.map(n => WORD[n]).join('+') + (many ? `, мостиков ${cfg.bridges}, двойных ${cfg.doubles}` : '');
   const gr = groups[key] || (groups[key] = { ok: 0, n: 0, ms: [] });
   const t = process.hrtime.bigint();
   const g = generate(cfg);
@@ -43,7 +45,7 @@ for (let k = 0; k < N; k++) {
 console.log(`Случайные настройки: собрано ${built} из ${N}`);
 for (const [k, g] of Object.entries(groups).sort()) {
   const s = g.ms.slice().sort((a, b) => a - b);
-  console.log(`  ${k.padEnd(34)} ${String(g.ok).padStart(3)}/${String(g.n).padEnd(3)}  среднее ${(s.reduce((a, b) => a + b, 0) / s.length).toFixed(1)} мс, максимум ${s[s.length - 1].toFixed(0)} мс`);
+  console.log(`  ${k.padEnd(40)} ${String(g.ok).padStart(3)}/${String(g.n).padEnd(3)}  среднее ${(s.reduce((a, b) => a + b, 0) / s.length).toFixed(1)} мс, максимум ${s[s.length - 1].toFixed(0)} мс`);
 }
 if (bad) { console.log(`\nОШИБКА: неверных улиц — ${bad}`); process.exitCode = 1; }
 else console.log('\nГенератор в порядке');

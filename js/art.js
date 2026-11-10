@@ -20,15 +20,24 @@ export function circ(x,y,r,fill){ctx.beginPath();ctx.arc(x,y,Math.max(0.1,r),0,M
 export function ell(x,y,rx,ry,fill){ctx.beginPath();ctx.ellipse(x,y,Math.max(0.1,rx),Math.max(0.1,ry),0,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();}
 export function dropPath(x,y,r){ctx.beginPath();ctx.moveTo(x,y-r);ctx.bezierCurveTo(x+r*0.95,y-r*0.05,x+r*0.75,y+r*0.85,x,y+r*0.85);ctx.bezierCurveTo(x-r*0.75,y+r*0.85,x-r*0.95,y-r*0.05,x,y-r);ctx.closePath();}
 export function boltPath(x,y,r){ctx.beginPath();ctx.moveTo(x+r*0.2,y-r);ctx.lineTo(x-r*0.55,y+r*0.15);ctx.lineTo(x-r*0.02,y+r*0.15);ctx.lineTo(x-r*0.22,y+r);ctx.lineTo(x+r*0.58,y-r*0.18);ctx.lineTo(x+r*0.06,y-r*0.18);ctx.closePath();}
+// Пламя с двумя язычками (не путать с каплей): большой язык сверху, малый слева.
+export function flamePath(x,y,r){ctx.beginPath();ctx.moveTo(x,y+r*0.9);
+  ctx.bezierCurveTo(x-r*0.72,y+r*0.9,x-r*0.88,y+r*0.22,x-r*0.52,y-r*0.3);
+  ctx.bezierCurveTo(x-r*0.46,y-r*0.02,x-r*0.32,y+r*0.08,x-r*0.2,y+r*0.02);
+  ctx.bezierCurveTo(x-r*0.34,y-r*0.42,x-r*0.06,y-r*0.72,x+r*0.12,y-r*1.0);
+  ctx.bezierCurveTo(x+r*0.24,y-r*0.58,x+r*0.86,y-r*0.36,x+r*0.76,y+r*0.32);
+  ctx.bezierCurveTo(x+r*0.7,y+r*0.76,x+r*0.36,y+r*0.9,x,y+r*0.9);ctx.closePath();}
 export function starPath(x,y,r,rot){ctx.beginPath();for(let k=0;k<10;k++){const a=-Math.PI/2+(rot||0)+k*Math.PI/5,rr=k%2?r*0.45:r;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();}
-// Метка над домом или фонарём: капля (вода) или молния (ток); ok — сеть дошла.
+// Метка над потребителем: капля (вода), молния (ток) или пламя (газ); ok — сеть дошла.
+const BADGE={w:['#2a7fd6','#1b5fa8','#ffffff'],e:['#f2b631','#b98510','#3b2a04'],g:['#ef7d2d','#a8480f','#ffffff']};
 export function badge(x,y,r,kind,ok){
+  const k=BADGE[kind];
   circ(x,y+r*0.16,r,'rgba(20,40,20,.25)');
-  circ(x,y,r,ok?(kind==='w'?'#2a7fd6':'#f2b631'):'#fffaf0');
-  ctx.lineWidth=Math.max(1,r*0.15);ctx.strokeStyle=ok?(kind==='w'?'#1b5fa8':'#b98510'):'#cfc4a8';
+  circ(x,y,r,ok?k[0]:'#fffaf0');
+  ctx.lineWidth=Math.max(1,r*0.15);ctx.strokeStyle=ok?k[1]:'#cfc4a8';
   ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
-  if(kind==='w'){dropPath(x,y+r*0.02,r*0.58);ctx.fillStyle=ok?'#ffffff':'#a8b2b8';ctx.fill();}
-  else{boltPath(x,y,r*0.6);ctx.fillStyle=ok?'#3b2a04':'#a8b2b8';ctx.fill();}
+  if(kind==='w')dropPath(x,y+r*0.02,r*0.58);else if(kind==='e')boltPath(x,y,r*0.6);else flamePath(x,y-r*0.04,r*0.58);
+  ctx.fillStyle=ok?k[2]:'#a8b2b8';ctx.fill();
 }
 
 /* ---------- постройки и природа ----------
@@ -118,6 +127,72 @@ export function drawTP(x,y,s,on){
   for(let k=0;k<3;k++){const ix=x-w*0.25+k*w*0.25+dx*0.5,iy=y-h-dy*0.5;ctx.fillStyle='#f2efe6';ctx.fillRect(ix-s*0.015,iy-s*0.07,s*0.03,s*0.07);circ(ix,iy-s*0.075,s*0.022,'#ffffff');}
   if(on){const g=ctx.createRadialGradient(tx,ty,1,tx,ty,s*0.25);g.addColorStop(0,'rgba(255,220,90,.55)');g.addColorStop(1,'rgba(255,220,90,0)');ctx.fillStyle=g;ctx.fillRect(tx-s*0.25,ty-s*0.25,s*0.5,s*0.5);}
 }
+// Теплица: арка из поликарбоната с грядками. Газ греет её — внутри тёплый свет, помидоры краснеют, из трубы идёт пар.
+// f — сколько газа дошло (0…1), life — насколько она «живая» (для карты).
+export function drawGreenhouse(x,y,s,o){
+  const f=o.f||0,lf=o.life==null?0.35+0.65*f:o.life,ok=o.ok;
+  const w=s*0.56,rx=w/2,wh=s*0.08,ry=s*0.24,dx=s*0.14,dy=s*0.09,cy=y-wh;
+  const F=a=>[x+rx*Math.cos(a),cy+ry*Math.sin(a)];
+  ell(x+dx*0.5,y+s*0.012,w*0.72,s*0.075,'rgba(30,60,20,.24)');
+  const lo=life('#93b1bf',lf),hi=life('#e9f5fa',lf),warm='#ffd9a8';
+  // боковая стенка и крыша-полуцилиндр: полосы между передней и задней аркой, светлее там, куда падает свет
+  poly([[x+rx,y],[x+rx+dx,y-dy],[x+rx+dx,y-dy-wh],[x+rx,y-wh]],mixH(lo,warm,f*0.35));
+  const N=10;
+  for(let i=0;i<N;i++){
+    const a0=Math.PI+Math.PI*i/N,a1=Math.PI+Math.PI*(i+1)/N,am=(a0+a1)/2;
+    const nx=Math.cos(am)/rx,ny=Math.sin(am)/ry,nl=Math.hypot(nx,ny),lit=Math.max(0,(-0.45*nx-0.9*ny)/nl);
+    const p0=F(a0),p1=F(a1);
+    poly([p0,p1,[p1[0]+dx,p1[1]-dy],[p0[0]+dx,p0[1]-dy]],mixH(mixH(lo,hi,0.25+0.75*lit),warm,f*0.3));
+  }
+  const frame=life('#f3f7f9',lf),edge=life('#7f939d',lf);
+  ctx.strokeStyle=frame;ctx.lineWidth=Math.max(1,s*0.014);
+  for(let i=1;i<5;i++){const a=Math.PI+Math.PI*i/5,p=F(a);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(p[0]+dx,p[1]-dy);ctx.stroke();}
+  // труба обогревателя на крыше
+  const vp=F(Math.PI*1.75),vx=vp[0]+dx*0.6,vy=vp[1]-dy*0.6;
+  ctx.fillStyle=life('#6f7c86',lf);ctx.fillRect(vx-s*0.018,vy-s*0.075,s*0.036,s*0.08);
+  ctx.fillStyle=life('#4d5862',lf);ctx.fillRect(vx-s*0.026,vy-s*0.085,s*0.052,s*0.016);
+  if(ok)for(let k=0;k<3;k++){const t=((G.now/1500)+k/3)%1;circ(vx+t*s*0.05,vy-s*0.1-t*s*0.2,s*(0.02+t*0.03),`rgba(255,255,255,${0.6*(1-t)})`);}
+  // передняя арка: внутри грядки, сверху стекло и рама
+  const front=()=>{ctx.beginPath();ctx.moveTo(x-rx,y);ctx.lineTo(x-rx,cy);ctx.ellipse(x,cy,rx,ry,0,Math.PI,Math.PI*2,false);ctx.lineTo(x+rx,y);ctx.closePath();};
+  ctx.save();front();ctx.clip();
+  ctx.fillStyle=mixH(life('#6f8a64',lf),'#8a6a3f',0.35);ctx.fillRect(x-rx,y-s*0.06,w,s*0.06);
+  if(f>0.05){const g=ctx.createRadialGradient(x,y-s*0.12,1,x,y-s*0.12,s*0.34);g.addColorStop(0,`rgba(255,176,80,${0.55*f})`);g.addColorStop(1,'rgba(255,176,80,0)');ctx.fillStyle=g;ctx.fillRect(x-rx,y-wh-ry,w,wh+ry);}
+  const leaf=life('#3f8f3b',lf),leaf2=life('#6cbf55',lf);
+  for(const px of [x-w*0.31,x+w*0.31]){
+    ctx.strokeStyle=leaf;ctx.lineWidth=Math.max(1,s*0.014);ctx.beginPath();ctx.moveTo(px,y-s*0.04);ctx.lineTo(px,y-s*0.2);ctx.stroke();
+    circ(px-s*0.035,y-s*0.1,s*0.04,leaf);circ(px+s*0.035,y-s*0.14,s*0.04,leaf);circ(px,y-s*0.2,s*0.045,leaf2);
+    if(f>0.6){circ(px+s*0.03,y-s*0.09,s*0.02,'#e8473b');circ(px-s*0.025,y-s*0.165,s*0.018,'#e8473b');}
+  }
+  ctx.fillStyle=ok?'rgba(255,238,214,.22)':'rgba(214,232,240,.42)';ctx.fillRect(x-rx,y-wh-ry,w,wh+ry);
+  ctx.restore();
+  ctx.strokeStyle=frame;ctx.lineWidth=Math.max(1,s*0.013);
+  for(const k of [-0.62,0.62]){const mx=x+rx*k,top=cy-ry*Math.sqrt(1-k*k);ctx.beginPath();ctx.moveTo(mx,y);ctx.lineTo(mx,top);ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(x-rx,cy);ctx.lineTo(x+rx,cy);ctx.stroke();
+  ctx.fillStyle=ok?'rgba(255,220,170,.5)':life('#c9dbe3',lf);ctx.fillRect(x-s*0.055,y-s*0.17,s*0.11,s*0.17);
+  ctx.strokeRect(x-s*0.055,y-s*0.17,s*0.11,s*0.17);
+  front();ctx.lineWidth=Math.max(1,s*0.024);ctx.strokeStyle=edge;ctx.stroke();ctx.lineWidth=Math.max(1,s*0.012);ctx.strokeStyle=frame;ctx.stroke();
+}
+// Газгольдер: белая цистерна на опорах, оранжевая полоса, знак пламени и вентиль сверху.
+export function drawGasTank(x,y,s){
+  ell(x+s*0.05,y+s*0.012,s*0.32,s*0.07,'rgba(30,60,20,.28)');
+  const L=s*0.58,R=s*0.12,cy=y-s*0.2;
+  for(const k of [-1,1]){poly([[x+k*s*0.17-s*0.07,y],[x+k*s*0.17+s*0.07,y],[x+k*s*0.17+s*0.045,cy],[x+k*s*0.17-s*0.045,cy]],'#6f7a84');ctx.fillStyle='#55606a';ctx.fillRect(x+k*s*0.17-s*0.075,y-s*0.02,s*0.15,s*0.02);}
+  const body=()=>{rrect(x-L/2,cy-R,L,R*2,R);};
+  const g=ctx.createLinearGradient(0,cy-R,0,cy+R);g.addColorStop(0,'#ffffff');g.addColorStop(.45,'#e3e9ee');g.addColorStop(1,'#93a2ae');
+  body();ctx.fillStyle=g;ctx.fill();
+  ctx.save();body();ctx.clip();
+  ctx.fillStyle='#ef7d2d';ctx.fillRect(x-L/2,cy+R*0.12,L,R*0.34);
+  ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(x-L/2+R*0.6,cy-R*0.78,L-R*1.2,R*0.18);
+  ctx.restore();
+  body();ctx.strokeStyle='#7d8b96';ctx.lineWidth=Math.max(1,s*0.012);ctx.stroke();
+  circ(x-s*0.12,cy,s*0.062,'#ffffff');ctx.strokeStyle='#ef7d2d';ctx.lineWidth=Math.max(1,s*0.014);ctx.beginPath();ctx.arc(x-s*0.12,cy,s*0.062,0,Math.PI*2);ctx.stroke();
+  flamePath(x-s*0.12,cy-s*0.004,s*0.04);ctx.fillStyle='#ef7d2d';ctx.fill();
+  const vx=x+s*0.1,top=cy-R;
+  ctx.fillStyle='#8f9aa3';rrect(vx-s*0.05,top-s*0.03,s*0.1,s*0.035,s*0.01);ctx.fill();
+  ctx.fillStyle='#5b6670';ctx.fillRect(vx-s*0.014,top-s*0.11,s*0.028,s*0.085);
+  ctx.strokeStyle='#e0601c';ctx.lineWidth=Math.max(1.2,s*0.02);ctx.beginPath();ctx.ellipse(vx,top-s*0.11,s*0.05,s*0.018,0,0,Math.PI*2);ctx.stroke();
+  circ(vx-s*0.09,top-s*0.05,s*0.03,'#fdfdfb');ctx.strokeStyle='#3a4248';ctx.lineWidth=Math.max(1,s*0.01);ctx.beginPath();ctx.arc(vx-s*0.09,top-s*0.05,s*0.03,0,Math.PI*2);ctx.moveTo(vx-s*0.09,top-s*0.05);ctx.lineTo(vx-s*0.075,top-s*0.065);ctx.stroke();
+}
 // Дерево: v%3===0 — ёлка, иначе лиственное (иногда с яблоками).
 export function drawTree(x,y,s,lf,v){
   ell(x+s*0.07,y+s*0.01,s*0.24,s*0.07,'rgba(30,60,20,.26)');
@@ -163,12 +238,14 @@ export function drawFlowers(x,y,k,c){const fc=['#ff7aa8','#ffd34d','#ffffff','#b
 /* ---------- объекты в клетках ----------
    ПРАВИЛО: любой объект в клетке стоит по центру своих габаритов.
    Габариты — в долях размера s: [лево, право, верх, низ] от точки опоры (середина основания).
-   Новую постройку (газ, котельная…) добавь сюда с габаритами — она сама встанет по центру. */
+   Новую постройку (котельная…) добавь сюда с габаритами — она сама встанет по центру. */
 export const OBJECTS={
   house:{box:[-0.33,0.43,-0.62,0],scale:1,draw:(x,y,s,o)=>drawHouse(x,y,s,o)},
   lamp: {box:[-0.1,0.1,-0.8,0],scale:1,draw:(x,y,s,o)=>drawLamp(x,y,s,o)},
   tower:{box:[-0.245,0.245,-0.882,0],scale:0.92,draw:(x,y,s)=>drawTower(x,y,s)},
   tp:   {box:[-0.26,0.36,-0.492,0],scale:1.05,draw:(x,y,s,o)=>drawTP(x,y,s,o.on)},
+  greenhouse:{box:[-0.3,0.42,-0.41,0],scale:1.08,draw:(x,y,s,o)=>drawGreenhouse(x,y,s,o)},
+  gastank:{box:[-0.3,0.29,-0.46,0],scale:0.98,draw:(x,y,s)=>drawGasTank(x,y,s)},
   tree: {box:[-0.29,0.27,-0.66,0],scale:0.95,draw:(x,y,s,o)=>drawTree(x,y,s,1,o.v)},
   pine: {box:[-0.25,0.25,-0.78,0],scale:0.95,draw:(x,y,s,o)=>drawTree(x,y,s,1,o.v)},
   rocks:{box:[-0.28,0.24,-0.2,0.05],scale:1,draw:(x,y,s,o)=>drawRocks(x,y,s,o.v)},
