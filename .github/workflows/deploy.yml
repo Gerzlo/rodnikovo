@@ -32,7 +32,10 @@ jobs:
       - name: Установка Playwright
         run: |
           npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
+          # Системные пакеты ставим отдельно: если серверы Ubuntu не отвечают, идём дальше —
+          # на сборочной машине GitHub почти всё нужное уже есть.
+          timeout 120 npx playwright install-deps chromium || echo "Пакеты Ubuntu недоступны — продолжаем без них"
 
       - name: Тест генератора уровней
         run: npm run test:gen
