@@ -220,6 +220,23 @@ try {
     if (o) { await page.tap('#ovB2'); await sleep(300); }
   }
   {
+    // Окно уже на экране, а игрок жмёт нижнюю кнопку «Заново»: окно должно закрыться.
+    const l = await H(page, 'level'), c = l.cells.find(c => c.type === 'pipe' && !c.locked && c.taps > 0);
+    for (let k = 0; k < l.limit; k++) await tapCell(page, l, c, 'touch');
+    await sleep(900);
+    const before = await overlay(page);
+    await page.tap('#btnRestart'); await sleep(400);
+    const o = await overlay(page);
+    check('Окно «Ходы закончились» открыто → нижняя «Заново»: окно закрывается', !!before && !o && (await H(page, 'level')).moves === 0, o ? `осталось «${o}»` : '');
+    if (o) { await page.tap('#ovB2'); await sleep(300); }
+    await solve(page, 'touch'); await sleep(3200);
+    const w = await overlay(page);
+    await page.tap('#btnRestart'); await sleep(400);
+    const o2 = await overlay(page);
+    check('Окно победы открыто → нижняя «Заново»: окно закрывается', !!w && !o2, o2 ? `осталось «${o2}»` : '');
+    if (o2) { await page.tap('#ovB2'); await sleep(300); }
+  }
+  {
     const l = await H(page, 'level'), w0 = wrongCount(l);
     await page.tap('#btnHint'); await sleep(120); await page.tap('#btnBack'); await sleep(1200);
     const l2 = await H(page, 'level');

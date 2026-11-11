@@ -1,6 +1,6 @@
 // Поле улицы: плитки, трубы и провода, отрисовка улицы и её раскладка на экране.
 import { DX, DY, BIT, isCorner, bitCount, mulberry32, isLeaf } from './core.js';
-import { ctx, mixH, rrect, circ, ell, badge, flamePath, drawLock, drawInCell, drawTuft, drawFlowers } from './art.js';
+import { ctx, setCtx, mixH, rrect, circ, ell, badge, flamePath, drawLock, drawInCell, drawTuft, drawFlowers } from './art.js';
 import { G, B } from './state.js';
 
 /* ---------- трубы ---------- */
@@ -146,9 +146,11 @@ export function layoutLevel(){
   const rng=mulberry32(G.li*101+7);L.bgd=[];
   for(let k=0;k<80;k++){const x=rng()*VW,y=rng()*VH;if(x>B.x-24&&x<B.x+B.S*L.W+24&&y>B.y-28&&y<B.y+B.S*L.H+26)continue;L.bgd.push({x,y,t:rng()<0.35?'fl':'tuft',c:Math.floor(rng()*4),s:0.75+rng()*0.6});}
 }
-export function drawLevel(){
-  const L=G.L,now=G.now,VW=G.VW,VH=G.VH,tut=G.tut;
-  const S=B.S,W=L.W,H=L.H;
+// Неподвижная часть улицы: трава, рамка и плитки. Она не меняется, пока не изменится экран,
+// поэтому рисуется один раз в отдельный холст, а в каждом кадре просто копируется (так быстрее).
+let bgCv=null,bgKey='';
+function drawStatic(){
+  const L=G.L,VW=G.VW,VH=G.VH,S=B.S,W=L.W,H=L.H;
   ctx.fillStyle='#86c461';ctx.fillRect(0,0,VW,VH);
   ctx.save();ctx.globalAlpha=0.08;ctx.fillStyle='#ffffff';
   for(let k=-VH;k<VW+VH;k+=60){ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+30,0);ctx.lineTo(k+30-VH*0.45,VH);ctx.lineTo(k-VH*0.45,VH);ctx.fill();}
@@ -163,6 +165,18 @@ export function drawLevel(){
   for(const [cx,cy] of [[bx-m*0.5,by-m*0.5],[bx+bw+m*0.5,by-m*0.5],[bx-m*0.5,by+bh+m*0.4],[bx+bw+m*0.5,by+bh+m*0.4]])circ(cx,cy,2.2,'#7d5a2e');
   ctx.fillStyle='#6b4a32';rrect(bx-3,by-3,bw+6,bh+6,10);ctx.fill();
   for(const c of L.cells)drawTile(c,bx+c.x*S,by+c.y*S,S);
+}
+export function drawLevel(){
+  const L=G.L,now=G.now,tut=G.tut;
+  const S=B.S,W=L.W,H=L.H,bx=B.x,by=B.y;
+  const pw=Math.round(G.VW*G.DPR),ph=Math.round(G.VH*G.DPR),key=[G.li,pw,ph,G.DPR,bx,by,S].join();
+  if(key!==bgKey){
+    if(!bgCv)bgCv=document.createElement('canvas');
+    bgCv.width=pw;bgCv.height=ph;bgKey=key;
+    const main=ctx,oc=bgCv.getContext('2d');
+    setCtx(oc);oc.setTransform(G.DPR,0,0,G.DPR,0,0);drawStatic();setCtx(main);
+  }
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(bgCv,0,0);ctx.restore();
   for(const c of L.cells)if(c.segs.length)drawCellPipes(c,bx+c.x*S,by+c.y*S,S);
   const res=L.res;
   if(res&&L.state==='play')for(const lk of res.leaks)if(lk.net==='w'){

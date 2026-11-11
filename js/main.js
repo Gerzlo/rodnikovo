@@ -41,6 +41,7 @@ function refresh(){
 }
 function startLevel(i){
   const data=levelData(i);if(!data){toast('Не получилось собрать уровень');return;}
+  ov.hidden=true; // окно победы или проигрыша могло остаться открытым (нижняя кнопка «Заново»)
   G.li=i;const L=G.L=JSON.parse(JSON.stringify(data));L.state='play';G.moves=0;G.parts=[];
   for(const c of L.cells){c.turns=c.rot;c.anim=c.rot*Math.PI/2;for(const s of c.segs){s.f=0;s.was=false;s.fillAt=0;}}
   refresh();G.screen='level';
