@@ -96,7 +96,7 @@ async function winStars(page) {
 const wrongCount = lv => lv.cells.filter(c => c.taps > 0).length;
 
 const server = await serve();
-const URL = server.url + 'index.html';
+const URL = server.url + 'index.html?lang=ru'; // тесты сверяют русские надписи; английский проверяется отдельно ниже
 const guard = setTimeout(() => { console.error('ТЕСТ ЗАВИС: больше 12 минут'); process.exit(1); }, 12 * 60 * 1000);
 guard.unref();
 
@@ -129,14 +129,24 @@ try {
     const cy1 = await H(page, 'mapScroll');
     check('Карта прокручивается пальцем', cy1 < cy0 - 100, `верх экрана на карте: ${Math.round(cy0)} → ${Math.round(cy1)}`);
     check('Палец начал на открытой улице и сдвинулся — улица не открывается', (await H(page, 'screen')) === 'map' && !(await page.isVisible('#ov')));
-    const n19 = await showNode(page, 19);
-    check('Прокруткой можно добраться до последней улицы', n19.vis);
+    const nLast = await showNode(page, (await H(page, 'stars')).length - 1);
+    check('Прокруткой можно добраться до последней улицы', nLast.vis);
     await page.screenshot({ path: `${OUT}/03-map-top.png` });
-    await showNode(page, 0);
+    check('Текущая улица за краем экрана → появляется кнопка «К ул. 1»', await page.isVisible('#btnJump'), await page.textContent('#btnJump'));
+    await page.tap('#btnJump'); await sleep(900);
+    check('Кнопка «К ул. 1» возвращает карту к текущей улице', (await H(page, 'mapNodes'))[0].vis && !(await page.isVisible('#btnJump')));
+  }
+  {
+    await page.tap('#btnSound'); await sleep(100);
+    const off = await page.evaluate(() => localStorage.getItem('rodnikovo-sound'));
+    await page.tap('#btnSound'); await sleep(100);
+    check('Кнопка звука выключает и включает звук, выбор запоминается', off === '0' && (await page.evaluate(() => localStorage.getItem('rodnikovo-sound'))) === '1');
   }
   const total = (await H(page, 'stars')).length;
   for (let i = 0; i < total; i++) {
-    await openFromMap(page, 'touch');
+    // первая улица — кнопкой «Играть», дальше улицы открываются сами после кнопки «Дальше»
+    if (i === 0) await openFromMap(page, 'touch');
+    else { for (let k = 0; k < 40 && (await H(page, 'screen')) !== 'level' && !(await overlay(page)); k++) await sleep(100); await startIntroIfAny(page, 'touch'); }
     let lv = await H(page, 'level');
     const street = (await page.textContent('#tTitle')).replace('ул. ', '');
     check(`Ул. ${i + 1} «${street}» открылась`, lv && lv.index === i && lv.moves === 0 && lv.state === 'play' && !lv.solved,
@@ -145,17 +155,26 @@ try {
       const bad = lv.nets.filter(n => lv.cells.filter(c => c.type === 'src' && c.net === n).length !== 1 || lv.cells.filter(c => c.type === LEAF[n]).length < 2);
       check(`Ул. ${i + 1}: у каждой сети (${lv.nets.join('+')}) один источник и не меньше двух потребителей`, bad.length === 0, bad.join(','));
     }
-    const fixed = lv.cells.filter(c => c.locked || c.type === 'house' || c.type === 'lamp' || c.type === 'greenhouse' || c.type === 'src').slice(0, 5);
+    const isObj = c => c.locked || c.type === 'house' || c.type === 'lamp' || c.type === 'greenhouse' || c.type === 'src';
+    const fixed = lv.cells.filter(c => isObj(c) && !c.turns).slice(0, 5);
     for (const c of fixed) await tapCell(page, lv, c, 'touch');
-    check(`Ул. ${i + 1}: дома, источники и трубы с замком не крутятся и ходы не тратят`, (await H(page, 'level')).moves === 0);
-    if ([0, 5, 7, 8, 12, 15, 19].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
+    check(`Ул. ${i + 1}: источники, трубы с замком${lv.turn === 'leaf' ? '' : ' и дома'} не крутятся и ходы не тратят`, (await H(page, 'level')).moves === 0);
+    if (lv.turn === 'leaf') {
+      const leaf = lv.cells.find(c => c.turns && c.type !== 'pipe');
+      for (let k = 0; k < 4; k++) await tapCell(page, lv, leaf, 'touch');
+      const m = (await H(page, 'level')).moves;
+      await page.tap('#btnRestart'); await sleep(300);
+      check(`Ул. ${i + 1}: поворотный ввод крутится и тратит ход`, !!leaf && m === 4, `ходов ${m}`);
+    }
+    if ([0, 5, 7, 8, 12, 15, 19, 20, 25, 29].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
     lv = await solve(page, 'touch');
     check(`Ул. ${i + 1}: решена за минимум ходов`, lv.state === 'won' && lv.solved && lv.moves === lv.minTaps, `ходов ${lv.moves}`);
-    if ([12, 15, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
+    if ([12, 15, 20, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
     const st = await winStars(page), title = await page.textContent('#ovT');
     check(`Ул. ${i + 1}: окно победы, 3 звезды`, st === 3 && title.includes(street), title);
+    const b1 = await page.textContent('#ovB1');
     await page.tap('#ovB1'); await sleep(400);
-    check(`Ул. ${i + 1}: результат сохранён, следующая открыта`, (await H(page, 'screen')) === 'map' && (await H(page, 'stars'))[i] === 3);
+    check(`Ул. ${i + 1}: результат сохранён, кнопка «${b1}» ведёт на карту`, b1 === (i < total - 1 ? 'Дальше' : 'На карту') && (await H(page, 'screen')) === 'map' && (await H(page, 'stars'))[i] === 3);
   }
   await sleep(1700);
   await page.screenshot({ path: `${OUT}/02-map-done.png` });
@@ -185,7 +204,7 @@ try {
     const l = await solve(page, 'touch', 4);
     const st = await winStars(page), exp = l.moves <= l.t3 ? 3 : l.moves <= l.t2 ? 2 : 1;
     check('Лишние ходы → меньше звёзд', st === exp && st < 3, `${l.moves} ходов при минимуме ${l.minTaps} → ${st}★`);
-    await page.tap('#ovB1'); await sleep(300);
+    await page.tap('#btnBack'); await sleep(300);
     check('Лучший результат не затирается худшим', (await H(page, 'stars'))[2] === 3);
   }
 
@@ -285,6 +304,35 @@ try {
   }
   check('Ошибок в консоли нет (телефон)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
+
+  /* 7a. Английский язык и ворота между частями посёлка */
+  {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'en-US' });
+    const p = await c.newPage(); const e = watchErrors(p);
+    await p.goto(server.url + 'index.html'); await sleep(700);
+    const play = await p.textContent('#btnPlay');
+    await p.tap('#btnPlay'); await sleep(300);
+    const intro = `${await p.textContent('#ovT')} ${await p.textContent('#ovP')} ${await p.textContent('#ovB1')}`;
+    await p.tap('#ovB1'); await sleep(500);
+    const hud = `${await p.textContent('#tTitle')} | ${await p.textContent('#tSub')} | ${await p.textContent('#btnRestart')} | ${await p.textContent('#btnHint')}`;
+    const all = `${play} ${intro} ${hud}`;
+    check('Английский: у игрока с английским браузером нет русских букв', (await H(p, 'lang')) === 'en' && !/[а-яё]/i.test(all), all.slice(0, 110));
+    await p.screenshot({ path: `${OUT}/50-english.png` });
+    // ворота: первая часть пройдена на 1 звезду (10 из 18 нужных) — вторая закрыта
+    await p.evaluate(([k]) => localStorage.setItem(k, JSON.stringify({ stars: Array(10).fill(1) })), [SAVE_KEY]);
+    await p.goto(URL); await sleep(700);
+    const btn = await p.textContent('#btnPlay');
+    await p.tap('#btnPlay'); await sleep(200);
+    const toast = (await p.isVisible('#toast')) ? await p.textContent('#toast') : '';
+    check('Ворота: мало звёзд в первой части — вторая закрыта, кнопка говорит, сколько не хватает', (await H(p, 'screen')) === 'map' && btn.includes('8') && toast.includes('18'), `${btn} | ${toast}`);
+    await p.screenshot({ path: `${OUT}/51-gate.png` });
+    await p.evaluate(([k]) => localStorage.setItem(k, JSON.stringify({ stars: [3, 3, 3, 3, 1, 1, 1, 1, 1, 1] })), [SAVE_KEY]);
+    await p.reload(); await sleep(700);
+    await p.tap('#btnPlay'); await startIntroIfAny(p, 'touch');
+    check('Ворота: 18 звёзд набрано — вторая часть открывается', (await H(p, 'screen')) === 'level' && (await H(p, 'level')).index === 10);
+    check('Ошибок в консоли нет (английский и ворота)', e.length === 0, e.slice(0, 3).join(' | '));
+    await c.close();
+  }
 
   /* 8. Маленькие телефоны и планшет боком */
   for (const [dev, shot, min] of [

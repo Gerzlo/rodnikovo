@@ -1,5 +1,6 @@
 // Поле улицы: плитки, трубы и провода, отрисовка улицы и её раскладка на экране.
-import { DX, DY, BIT, isCorner, bitCount, mulberry32, isLeaf } from './core.js';
+import { DX, DY, BIT, isCorner, bitCount, mulberry32, isLeaf, canTurn } from './core.js';
+import { t as tr } from './i18n.js';
 import { ctx, setCtx, mixH, rrect, circ, ell, badge, flamePath, drawLock, drawInCell, drawTuft, drawFlowers } from './art.js';
 import { G, B } from './state.js';
 
@@ -71,6 +72,8 @@ function drawCellPipes(c,x0,y0,S){
   const h=S/2;
   ctx.save();ctx.translate(x0+h,y0+h);
   let ang=c.anim;if(c.wig){const t=(G.now-c.wig)/320;if(t<1)ang+=Math.sin(t*Math.PI*6)*0.13*(1-t);}
+  // нажатая труба на мгновение «подпрыгивает»
+  if(c.pop){const k=(G.now-c.pop)/170;if(k<1){const z=1+0.09*Math.sin(k*Math.PI);ctx.scale(z,z);}}
   ctx.rotate(ang);curAng=ang;
   ctx.beginPath();ctx.rect(-h,-h,S,S);ctx.clip();
   const segs=c.segs.slice().sort((a,b)=>ORDER[a.net]-ORDER[b.net]);
@@ -118,6 +121,18 @@ function drawSourceTile(net,x,y,S,g,r){
   ctx.restore();
   ctx.strokeStyle=p.rim;ctx.lineWidth=Math.max(1.5,S*0.025);rrect(x+g+1.5,y+g+1.5,w-3,h-3,Math.max(1,r-1.5));ctx.stroke();
 }
+// Плитка поворотного ввода: трава и круглая каменная площадка с насечками — видно, что клетку можно крутить.
+function drawTurnTile(x,y,S,g,r){
+  ctx.fillStyle='#5d9a42';rrect(x+g,y+g+2.5,S-2*g,S-2*g,r);ctx.fill();
+  const gr=ctx.createLinearGradient(0,y,0,y+S);gr.addColorStop(0,'#a3d977');gr.addColorStop(1,'#87c25d');
+  ctx.fillStyle=gr;rrect(x+g,y+g,S-2*g,S-2*g-1.5,r);ctx.fill();
+  const cx=x+S/2,cy=y+S/2-0.5,R=S*0.41;
+  circ(cx,cy+S*0.03,R,'#8d8266');circ(cx,cy,R,'#e9dfc4');
+  ctx.strokeStyle='#bfb18c';ctx.lineWidth=Math.max(1,S*0.022);ctx.beginPath();ctx.arc(cx,cy,R*0.8,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='#a89a76';ctx.lineWidth=Math.max(1.2,S*0.03);ctx.lineCap='round';
+  for(let k=0;k<8;k++){const a=k*Math.PI/4+Math.PI/8;ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*R*0.86,cy+Math.sin(a)*R*0.86);ctx.lineTo(cx+Math.cos(a)*R*0.96,cy+Math.sin(a)*R*0.96);ctx.stroke();}
+  ctx.lineCap='butt';
+}
 function drawTile(c,x,y,S){
   const g=Math.max(1.5,S*0.035),r=S*0.16;
   if(c.type==='src'){drawSourceTile(c.segs[0].net,x,y,S,g,r);return;}
@@ -129,6 +144,7 @@ function drawTile(c,x,y,S){
     return;
   }
   const alt=(c.x+c.y)%2===0;
+  if(isLeaf(c.type)&&canTurn(G.L,c)){drawTurnTile(x,y,S,g,r);return;}
   ctx.fillStyle='#5d9a42';rrect(x+g,y+g+2.5,S-2*g,S-2*g,r);ctx.fill();
   const gr=ctx.createLinearGradient(0,y,0,y+S);gr.addColorStop(0,alt?'#a8dd7b':'#9ed671');gr.addColorStop(1,alt?'#8cc862':'#83bf59');
   ctx.fillStyle=gr;rrect(x+g,y+g,S-2*g,S-2*g-1.5,r);ctx.fill();
@@ -155,6 +171,7 @@ function drawStatic(){
   ctx.save();ctx.globalAlpha=0.08;ctx.fillStyle='#ffffff';
   for(let k=-VH;k<VW+VH;k+=60){ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+30,0);ctx.lineTo(k+30-VH*0.45,VH);ctx.lineTo(k-VH*0.45,VH);ctx.fill();}
   ctx.restore();
+  {const lg=ctx.createRadialGradient(VW/2,VH*0.42,10,VW/2,VH*0.42,Math.max(VW,VH)*0.75);lg.addColorStop(0,'rgba(255,255,210,.2)');lg.addColorStop(1,'rgba(40,90,30,.16)');ctx.fillStyle=lg;ctx.fillRect(0,0,VW,VH);}
   for(const d of L.bgd){if(d.t==='tuft')drawTuft(d.x,d.y,d.s);else drawFlowers(d.x,d.y,d.s,d.c);}
   const bx=B.x,by=B.y,bw=S*W,bh=S*H,m=Math.max(9,S*0.17);
   ctx.fillStyle='rgba(30,60,20,.28)';rrect(bx-m+4,by-m+9,bw+m*2,bh+m*2,18);ctx.fill();
@@ -170,6 +187,13 @@ export function drawLevel(){
   const L=G.L,now=G.now,tut=G.tut;
   const S=B.S,W=L.W,H=L.H,bx=B.x,by=B.y;
   const pw=Math.round(G.VW*G.DPR),ph=Math.round(G.VH*G.DPR),key=[G.li,pw,ph,G.DPR,bx,by,S].join();
+  // только что подключённый дом, фонарь или теплица подпрыгивает
+  const bump=(c,x0,y0,draw)=>{
+    const k=c.litAt?(now-c.litAt)/380:1;
+    if(k>=1){draw();return;}
+    const z=1+0.16*Math.sin(k*Math.PI)*(1-k*0.4);
+    ctx.save();ctx.translate(x0+S/2,y0+S*0.86);ctx.scale(z,z);ctx.translate(-(x0+S/2),-(y0+S*0.86));draw();ctx.restore();
+  };
   if(key!==bgKey){
     if(!bgCv)bgCv=document.createElement('canvas');
     bgCv.width=pw;bgCv.height=ph;bgKey=key;
@@ -185,9 +209,10 @@ export function drawLevel(){
   }
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const c=L.cells[y*W+x],x0=bx+x*S,y0=by+y*S;
-    if(c.type==='house'){const s=c.segs[0];drawInCell('house',x0,y0,S,{v:c.v,ok:s.f>0.85,life:0.35+0.65*s.f});}
-    else if(c.type==='lamp'){const s=c.segs[0];drawInCell('lamp',x0,y0,S,{on:s.f>0.85,f:s.f});}
-    else if(c.type==='greenhouse'){const s=c.segs[0];drawInCell('greenhouse',x0,y0,S,{f:s.f,ok:s.f>0.85});}
+    const tk=isLeaf(c.type)&&canTurn(L,c)?0.07:0; // на поворотной площадке постройка чуть меньше: виднее, куда смотрит ввод
+    if(c.type==='house'){const s=c.segs[0];bump(c,x0,y0,()=>drawInCell('house',x0+tk*S,y0+tk*S,S*(1-2*tk),{v:c.v,ok:s.f>0.85,life:0.35+0.65*s.f}));}
+    else if(c.type==='lamp'){const s=c.segs[0];bump(c,x0,y0,()=>drawInCell('lamp',x0+tk*S,y0+tk*S,S*(1-2*tk),{on:s.f>0.85,f:s.f}));}
+    else if(c.type==='greenhouse'){const s=c.segs[0];bump(c,x0,y0,()=>drawInCell('greenhouse',x0+tk*S,y0+tk*S,S*(1-2*tk),{f:s.f,ok:s.f>0.85}));}
     else if(c.type==='src')drawInCell(SRC_OBJ[c.segs[0].net],x0,y0,S,{on:true});
     else if(c.type==='block')drawInCell(c.v%2?'rocks':(c.v%3===0?'pine':'tree'),x0,y0,S,{v:c.v});
     else if(c.type==='deco')drawInCell('bush',x0,y0,S,{v:c.v});
@@ -211,7 +236,7 @@ export function drawLevel(){
     const c=L.cells[tut],px=bx+(c.x+0.5)*S,py=by+(c.y+0.5)*S,t=(now%1200)/1200;
     ctx.strokeStyle=`rgba(255,255,255,${0.9*(1-t)})`;ctx.lineWidth=4;ctx.beginPath();ctx.arc(px,py,S*(0.32+0.25*t),0,Math.PI*2);ctx.stroke();
     ctx.font='800 13px Nunito, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    const ty=py-S*0.72;ctx.fillStyle='rgba(20,32,26,.85)';rrect(px-34,ty-12,68,24,12);ctx.fill();ctx.fillStyle='#fff';ctx.fillText('Нажми',px,ty+1);
+    const ty=py-S*0.72;ctx.fillStyle='rgba(20,32,26,.85)';rrect(px-34,ty-12,68,24,12);ctx.fill();ctx.fillStyle='#fff';ctx.fillText(tr('tap'),px,ty+1);
   }
   for(const c of L.cells)if(c.hintAt&&now-c.hintAt<1400){
     const t=(now-c.hintAt)/1400,px=bx+(c.x+0.5)*S,py=by+(c.y+0.5)*S;

@@ -25,6 +25,11 @@ body{
 .title b{font-family:var(--display);font-weight:700;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .title span{font-size:13px;color:var(--on-pine-soft);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{font:inherit;font-weight:800;font-size:14px;color:var(--on-pine);background:var(--pine-2);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:9px 12px;cursor:pointer}
+.chip.icon{padding:8px 9px;line-height:0}
+.chip.icon .cross{display:none}
+.chip.icon.off .wave{display:none}
+.chip.icon.off .cross{display:block}
+.chip.icon.off{color:var(--on-pine-soft)}
 .score{font-family:var(--display);font-size:14px;color:var(--gold);background:var(--pine-2);border-radius:12px;padding:9px 11px;white-space:nowrap}
 .moves{display:flex;align-items:center;gap:10px;background:var(--pine-2);border-radius:14px;padding:8px 12px}
 .mv-stars{color:var(--gold);font-size:17px;letter-spacing:1px;white-space:nowrap}
@@ -37,6 +42,22 @@ body{
 .mv-num small{font-family:var(--body);font-size:12px;color:var(--on-pine-soft);font-weight:700;margin-right:5px}
 .stage{flex:1;min-height:0;position:relative;border-radius:20px;overflow:hidden;background:#86c461}
 canvas{display:block;width:100%;height:100%;touch-action:none}
+.chip.jump{position:absolute;right:12px;bottom:12px;background:rgba(20,32,26,.88);border-color:rgba(255,255,255,.25);box-shadow:0 3px 0 rgba(0,0,0,.25);z-index:2}
+/* мягкая тень по краям сцены и короткое проявление при смене экрана */
+.stage::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14),inset 0 -14px 34px rgba(24,60,24,.2),inset 0 10px 26px rgba(255,255,220,.12)}
+canvas.swap{animation:swap .26s ease-out}
+@keyframes swap{from{opacity:.25;transform:scale(1.025)}to{opacity:1;transform:none}}
+.mv-num span.bump{display:inline-block;animation:bump .22s ease-out}
+@keyframes bump{from{transform:scale(1.28)}to{transform:none}}
+.card.pop{animation:cardpop .28s cubic-bezier(.2,1.3,.4,1)}
+@keyframes cardpop{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}
+.card.pop .big-stars span{display:inline-block;animation:starpop .42s cubic-bezier(.2,1.6,.4,1) backwards}
+.card.pop .big-stars span:nth-child(1){animation-delay:.5s}
+.card.pop .big-stars span:nth-child(2){animation-delay:.69s}
+.card.pop .big-stars span:nth-child(3){animation-delay:.88s}
+@keyframes starpop{from{opacity:0;transform:scale(.2) rotate(-40deg)}to{opacity:1;transform:none}}
+.ov{animation:ovfade .2s ease-out}
+@keyframes ovfade{from{background:rgba(18,38,28,0)}}
 .bottom{display:flex}
 .bottom > div{display:flex;gap:10px;flex:1}
 .btn{flex:1;font:inherit;font-weight:800;font-size:16px;line-height:1.15;border:0;border-radius:16px;padding:13px 14px;cursor:pointer;color:#fff;background:var(--water);box-shadow:0 3px 0 var(--water-deep)}
@@ -52,7 +73,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .big-stars .off{color:#ddd2b7}
 .card .row{display:flex;gap:10px;margin-top:6px}
 .tag{align-self:center;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--water-deep);background:#e1edfa;border-radius:999px;padding:4px 10px}
-.toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,32,26,.88);color:#fff;font-weight:800;font-size:14px;border-radius:999px;padding:8px 14px;white-space:nowrap}
+.toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,32,26,.88);color:#fff;font-weight:800;font-size:14px;border-radius:18px;padding:8px 14px;width:max-content;max-width:calc(100% - 28px);box-sizing:border-box;text-align:center;line-height:1.25;z-index:3}
 /* Телефон боком: игру закрываем заставкой и просим повернуть — Родниково только вертикальная.
    Срабатывает только на сенсорном экране высотой до 500 px: компьютер и планшет не задевает. */
 .rotate{display:none;position:fixed;inset:0;z-index:50;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--pine);color:var(--on-pine)}
@@ -61,4 +82,4 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .rotate .ph{transform-box:fill-box;transform-origin:center;animation:tilt 2.6s ease-in-out infinite}
 @keyframes tilt{0%,25%{transform:rotate(-90deg)}55%,100%{transform:rotate(0deg)}}
 @media (orientation:landscape) and (pointer:coarse) and (max-height:500px){.rotate{display:flex}}
-@media (prefers-reduced-motion:reduce){.btn,.bar i,.mv-stars i{transition:none}.rotate .ph{animation:none}}
+@media (prefers-reduced-motion:reduce){.btn,.bar i,.mv-stars i{transition:none}.rotate .ph,canvas.swap,.card.pop,.card.pop .big-stars span,.mv-num span.bump,.ov{animation:none}}

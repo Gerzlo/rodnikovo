@@ -17,16 +17,18 @@
   <header class="top">
     <button class="chip" id="btnBack" type="button" hidden>← Карта</button>
     <div class="title"><b id="tTitle">Родниково</b><span id="tSub">Посёлок ждёт воду</span></div>
+    <button class="chip icon" id="btnSound" type="button" aria-label="Звук"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z" fill="currentColor"/><path class="wave" d="M15.2 9.2a4 4 0 0 1 0 5.6M17.6 6.8a7.4 7.4 0 0 1 0 10.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path class="cross" d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
     <div class="score" id="tScore">★ 0</div>
   </header>
   <div class="moves" id="movesBox" hidden>
     <div class="mv-stars" id="mvStars"><i>★</i><i>★</i><i>★</i></div>
     <div class="bar" id="mvBar"><i id="mvFill"></i></div>
-    <div class="mv-num"><small>ходов</small><span id="mvLeft">0</span></div>
+    <div class="mv-num"><small id="mvWord">ходов</small><span id="mvLeft">0</span></div>
   </div>
   <main class="stage" id="stage">
     <canvas id="cv" aria-label="Игровое поле"></canvas>
     <div class="toast" id="toast" hidden></div>
+    <button class="chip jump" id="btnJump" type="button" hidden></button>
     <div class="ov" id="ov" hidden>
       <div class="card">
         <span class="tag" id="ovTag" hidden></span>
@@ -51,8 +53,8 @@
     <path d="M45 5.5A26 26 0 0 1 56.4 36.9" fill="none" stroke="#ffc83d" stroke-width="3" stroke-linecap="round"/>
     <path d="M51.6 34.8L56.4 36.9L58.4 31.8" fill="none" stroke="#ffc83d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
-  <b>Поверни телефон</b>
-  <span>Родниково играется только вертикально</span>
+  <b id="rot1">Поверни телефон</b>
+  <span id="rot2">Родниково играется только вертикально</span>
 </div>
 </body>
 </html>

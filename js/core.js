@@ -5,6 +5,9 @@
 export const LEAF = { w: 'house', e: 'lamp', g: 'greenhouse' };
 export const isLeaf = t => t === 'house' || t === 'lamp' || t === 'greenhouse';
 
+// Можно ли крутить клетку: трубу без замка — всегда; ввод дома, фонаря или теплицы — на улицах с turn:'leaf'.
+export const canTurn = (L, c) => c.type === 'pipe' ? !c.locked : L.turn === 'leaf' && isLeaf(c.type);
+
 // Направления: 0 — север, 1 — восток, 2 — юг, 3 — запад. Маска клетки — набор открытых сторон (биты 1, 2, 4, 8).
 export const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0], BIT = [1, 2, 4, 8];
 export const opp = d => (d + 2) & 3;
@@ -134,7 +137,8 @@ function tryGen(cfg,rng){
   const pool=pipes.filter(c=>c.segs.length===1&&!isStraight(c.segs[0].mask));
   while(nl>0&&pool.length){const k=ri(pool.length);pool[k].locked=true;pool.splice(k,1);nl--;}
   if(nl>0)return null;
-  const rotatable=pipes.filter(c=>!c.locked);
+  const turn=cfg.turn==='leaf'?'leaf':'pipe';
+  const rotatable=turn==='leaf'?cells.filter(c=>canTurn({turn},c)):pipes.filter(c=>!c.locked);
   const srcIdx={};for(const n of nets)srcIdx[n]=src[n].y*W+src[n].x;
   const L={W,H,nets,cells,src:srcIdx};
   for(let t=0;t<40;t++){
@@ -142,8 +146,8 @@ function tryGen(cfg,rng){
     let taps=0,need=0;for(const c of rotatable){const k=tapsToSolve(c);taps+=k;if(k)need++;}
     if(need<rotatable.length*0.6)continue;
     if(evaluate(L).solved)continue;
-    const slack=Math.max(3,Math.ceil(taps*0.35));
-    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,
+    const slack=Math.max(3,Math.ceil(taps*(cfg.slack||0.35))); // запас ходов сверх минимума
+    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,turn,
       cells:cells.map((c,i)=>({x:c.x,y:c.y,type:c.type,segs:c.segs.map(s=>({net:s.net,mask:s.mask})),rot:c.rot,locked:c.locked,shared:c.shared,v:(i*37+ri(997))%997})),
       minTaps:taps,limit:taps+slack,t3:taps+Math.floor(slack/3),t2:taps+Math.floor(slack*2/3)};
   }

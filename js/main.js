@@ -1,7 +1,9 @@
 // Главный модуль: экраны, кнопки, касания, ход игры и главный цикл.
-import { DX, DY, tapsToSolve, evaluate, generate, isLeaf } from './core.js';
-import { LEVELS } from './levels.js';
-import { G, B, M, unlocked, currentIdx } from './state.js';
+import { DX, DY, tapsToSolve, evaluate, generate, isLeaf, canTurn } from './core.js';
+import { LEVELS, CHAPTER, GATE } from './levels.js';
+import { G, B, M, unlocked, currentIdx, gateNeed, chapterStars } from './state.js';
+import { t, lang, streetName, netsText } from './i18n.js';
+import { sound } from './sound.js';
 import { setCtx } from './art.js';
 import { spawn, updParts, drawPart } from './fx.js';
 import { layoutLevel, drawLevel } from './board.js';
@@ -14,7 +16,11 @@ setCtx(ctx);
 const ov=$('ov'),ovTag=$('ovTag'),ovStars=$('ovStars'),ovT=$('ovT'),ovP=$('ovP'),ovB1=$('ovB1'),ovB2=$('ovB2');
 const tTitle=$('tTitle'),tSub=$('tSub'),tScore=$('tScore'),btnBack=$('btnBack');
 const movesBox=$('movesBox'),mvStars=$('mvStars'),mvBar=$('mvBar'),mvFill=$('mvFill'),mvLeft=$('mvLeft');
-const mapBar=$('mapBar'),lvlBar=$('lvlBar'),btnPlay=$('btnPlay'),btnRestart=$('btnRestart'),btnHint=$('btnHint'),toastEl=$('toast');
+const mapBar=$('mapBar'),lvlBar=$('lvlBar'),btnPlay=$('btnPlay'),btnRestart=$('btnRestart'),btnHint=$('btnHint'),toastEl=$('toast'),btnSound=$('btnSound'),btnJump=$('btnJump');
+// Надписи в разметке — на языке игрока.
+document.documentElement.lang=lang;document.title=t('title');
+btnBack.textContent=t('back');$('mvWord').textContent=t('moves');btnRestart.textContent=t('restart');
+btnHint.innerHTML=`${t('hint')}<small>${t('hintSub')}</small>`;$('rot1').textContent=t('rotate1');$('rot2').textContent=t('rotate2');cv.setAttribute('aria-label',t('boardAria'));
 // iPhone: запрет масштабирования щипком. В режиме «На экран Домой» увеличенный масштаб иначе «залипает»
 // (после поворота телефона или случайного щипка) — шапка уезжает под строку со временем, края обрезаются.
 for(const ev of ['gesturestart','gesturechange','gestureend'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
@@ -25,9 +31,6 @@ G.now=performance.now();
 G.stars=platform.loadStars(LEVELS.length);
 function save(){platform.saveStars(G.stars);}
 const genCache=[];
-// Какие сети на улице — словами: «вода», «вода и газ», «вода, свет и газ».
-const NET_WORD={w:'вода',e:'свет',g:'газ'};
-function netsText(nets){const w=nets.map(n=>NET_WORD[n]);return w.length<2?w[0]:w.slice(0,-1).join(', ')+' и '+w[w.length-1];}
 function levelData(i){if(!genCache[i])genCache[i]=generate(LEVELS[i]);return genCache[i];}
 
 /* ---------- ход игры ---------- */
@@ -37,21 +40,24 @@ function refresh(){
   const newly=[];let minD=1e9;
   for(const c of L.cells)for(const s of c.segs){if(s.reached&&!s.was){newly.push(s);if(s.depth<minD)minD=s.depth;}s.was=s.reached;}
   for(const s of newly)s.fillAt=G.now+(s.depth-minD)*75;
+  if(newly.length&&G.now>L.quiet)sound.play('flow',newly.length);
   return r;
 }
 function startLevel(i){
-  const data=levelData(i);if(!data){toast('Не получилось собрать уровень');return;}
+  const data=levelData(i);if(!data){toast(t('genFail'));return;}
+  G.autoNext=null;
   ov.hidden=true; // окно победы или проигрыша могло остаться открытым (нижняя кнопка «Заново»)
   G.li=i;const L=G.L=JSON.parse(JSON.stringify(data));L.state='play';G.moves=0;G.parts=[];
+  L.quiet=G.now+900;L.lit=0; // первые мгновения улица наполняется молча
   for(const c of L.cells){c.turns=c.rot;c.anim=c.rot*Math.PI/2;for(const s of c.segs){s.f=0;s.was=false;s.fillAt=0;}}
-  refresh();G.screen='level';
+  refresh();swap('level');
   G.tut=-1;if(i===0&&!G.stars[0]){const c=pickHint();if(c)G.tut=L.cells.indexOf(c);}
   layoutLevel();showScreenUi();updateHud();
 }
 // Какую трубу подсказать: неправильную, рядом с уже заполненной сетью и ближе к источнику.
 function pickHint(){
   const L=G.L;
-  const cand=L.cells.filter(c=>c.type==='pipe'&&!c.locked&&tapsToSolve(c)>0);
+  const cand=L.cells.filter(c=>canTurn(L,c)&&tapsToSolve(c)>0);
   if(!cand.length)return null;
   const score=c=>{let best=99;for(let d=0;d<4;d++){const n=L.cells[(c.y+DY[d])*L.W+(c.x+DX[d])];if(c.x+DX[d]<0||c.y+DY[d]<0||c.x+DX[d]>=L.W||c.y+DY[d]>=L.H)continue;if(n.segs.some(s=>s.reached))best=Math.min(best,0);}
     const sc=L.cells[L.src[c.segs[0].net]];return best*100+Math.abs(sc.x-c.x)+Math.abs(sc.y-c.y);};
@@ -62,9 +68,8 @@ function tapLevel(px,py){
   const gx=Math.floor((px-B.x)/B.S),gy=Math.floor((py-B.y)/B.S);
   if(gx<0||gy<0||gx>=L.W||gy>=L.H)return;
   const c=L.cells[gy*L.W+gx];
-  if(c.type!=='pipe')return;
-  if(c.locked){c.wig=G.now;return;}
-  c.turns++;c.rot=c.turns&3;G.moves++;G.tut=-1;
+  if(!canTurn(L,c)){if(c.type==='pipe'){c.wig=G.now;sound.play('stuck');}return;}
+  c.turns++;c.rot=c.turns&3;c.pop=G.now;G.moves++;G.tut=-1;sound.play('turn');
   afterChange();
 }
 // После каждого хода: победа, проигрыш или играем дальше.
@@ -72,7 +77,7 @@ function tapLevel(px,py){
 function afterChange(){
   const L=G.L,r=refresh();updateHud();
   if(r.solved)win(r);
-  else if(G.moves>=L.limit){L.state='lost';setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='lost')showFail();},500);}
+  else if(G.moves>=L.limit){L.state='lost';setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='lost'){sound.play('fail');showFail();}},500);}
 }
 const starsFor=m=>m<=G.L.t3?3:m<=G.L.t2?2:1;
 function win(r){
@@ -86,35 +91,46 @@ function win(r){
     const s=c.segs[0],px=B.x+(c.x+0.5)*S,py=B.y+(c.y+0.3)*S;
     for(let k=0;k<9;k++)spawn(G.parts,{k:'star',x:px,y:py,vx:(Math.random()-0.5)*130,vy:-70-Math.random()*130,g:170,life:1,max:1,r:3+Math.random()*4,c:['#ffd34d','#ffffff','#7cc4ff'][k%3],delay:Math.max(0,s.depth)*0.075+Math.random()*0.15});
   }
-  setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='won')showWin(st);},950+r.maxDepth*75);
+  setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='won'){sound.play('win');for(let k=0;k<st;k++)setTimeout(()=>sound.play('star',k),520+k*190);showWin(st);}},950+r.maxDepth*75);
 }
 function showWin(st){
-  const L=G.L,li=G.li,moves=G.moves;
-  showOverlay({stars:st,title:`ул. ${LEVELS[li].name}: ${netsText(L.nets)} есть!`,
-    text:st===3?`Ходов: ${moves}. Идеально!`:`Ходов: ${moves}. На три звезды нужно не больше ${L.t3}.`,
-    b1:{label:'На карту',fn:goMap},b2:{label:'Ещё раз',fn:()=>startLevel(li)}});
+  const L=G.L,li=G.li,moves=G.moves,nx=li+1<LEVELS.length&&unlocked(li+1);
+  showOverlay({stars:st,title:t('winTitle',{s:streetName(LEVELS[li]),nets:netsText(L.nets)}),
+    text:st===3?t('winPerfect',{m:moves}):t('winMore',{m:moves,t:L.t3}),
+    b1:nx?{label:t('next'),fn:()=>goMap(li+1)}:{label:t('toMap'),fn:()=>goMap()},b2:{label:t('again'),fn:()=>startLevel(li)}});
 }
 function showFail(){
   const li=G.li;
-  showOverlay({title:'Ходы закончились',text:'Осталось совсем немного. Возьми 5 ходов за просмотр рекламы или начни улицу заново.',
-    b1:{label:'+5 ходов',fn:()=>{const L=G.L;fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='lost')return;L.limit+=5;L.state='play';updateHud();});}},
-    b2:{label:'Заново',fn:()=>startLevel(li)}});
+  showOverlay({title:t('failTitle'),text:t('failText'),
+    b1:{label:t('plus5'),fn:()=>{const L=G.L;fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='lost')return;L.limit+=5;L.state='play';updateHud();});}},
+    b2:{label:t('restart'),fn:()=>startLevel(li)}});
 }
-function fakeAd(fn){toast('Здесь будет реклама');platform.rewarded(fn);}
+function fakeAd(fn){toast(t('ad'));platform.rewarded(fn);}
 function openLevel(i){
-  const lv=LEVELS[i];
-  if(lv.intro&&!G.stars[i])showOverlay({tag:lv.intro.tag,title:lv.intro.t,text:lv.intro.p,b1:{label:'Начать',fn:()=>startLevel(i)},b2:{label:'Назад'}});
+  const lv=LEVELS[i];G.autoNext=null;
+  if(lv.intro&&!G.stars[i])showOverlay({tag:t(lv.intro.tag),title:t('i_'+lv.intro.key+'_t'),text:t('i_'+lv.intro.key+'_p'),b1:{label:t('start'),fn:()=>startLevel(i)},b2:{label:t('cancel')}});
   else startLevel(i);
 }
-function goMap(){
-  G.screen='map';G.parts=[];mapFocus(G.li,true);
-  const ma=G.mapAnim;
+// Почему улица закрыта: не пройдена предыдущая или в прошлой части посёлка мало звёзд.
+function whyLocked(i){
+  if(i>0&&G.stars[i-1]>0&&gateNeed(i))return t('gateToast',{need:GATE,have:chapterStars(i/CHAPTER-1)});
+  return t('lockedToast',{s:streetName(LEVELS[i-1])});
+}
+// На карту. next — улица, которая откроется сама, когда квартал оживёт (кнопка «Дальше»).
+function goMap(next){
+  swap('map');G.parts=[];mapFocus(G.li,true);
+  const ma=G.mapAnim;let wait=450;
   if(ma&&!ma.t0){
+    wait=1900;
     ma.t0=G.now+350;const [ax,ay]=DISTRICTS[ma.i];
     for(let k=0;k<26;k++)spawn(G.mparts,{k:'star',x:ax+(Math.random()-0.5)*70,y:ay-10-Math.random()*30,vx:(Math.random()-0.5)*50,vy:-30-Math.random()*70,g:40,life:1.2,max:1.2,r:2.5+Math.random()*3.5,c:['#ffd34d','#ffffff','#7cc4ff'][k%3],delay:0.35+Math.random()*0.9});
   }
+  G.autoNext=next!=null?{i:next,at:G.now+wait}:null;
+  if(next!=null)setTimeout(()=>{if(G.autoNext&&G.screen==='map')mapFocus(next,false);},Math.max(0,wait-700));
   showScreenUi();updateHud();
 }
+// Смена экрана с коротким проявлением.
+function swap(screen){G.screen=screen;cv.classList.remove('swap');void cv.offsetWidth;cv.classList.add('swap');}
 
 /* ---------- интерфейс ---------- */
 function showOverlay(o){
@@ -125,39 +141,45 @@ function showOverlay(o){
   ovB1.textContent=o.b1.label;ovB1.onclick=()=>{ov.hidden=true;o.b1.fn();};
   if(o.b2){ovB2.hidden=false;ovB2.textContent=o.b2.label;ovB2.onclick=()=>{ov.hidden=true;if(o.b2.fn)o.b2.fn();};}else ovB2.hidden=true;
   ov.hidden=false;ovB1.focus({preventScroll:true});
+  const card=ov.firstElementChild;card.classList.remove('pop');void card.offsetWidth;card.classList.add('pop');
 }
 let toastT=0;
 function toast(msg){toastEl.textContent=msg;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},1300);}
 function showScreenUi(){
   const lv=G.screen==='level';
-  btnBack.hidden=!lv;movesBox.hidden=!lv;mapBar.hidden=lv;lvlBar.hidden=!lv;
+  btnBack.hidden=!lv;movesBox.hidden=!lv;mapBar.hidden=lv;lvlBar.hidden=!lv;btnSound.hidden=lv;if(lv)btnJump.hidden=true;
   requestAnimationFrame(fit);
 }
 function updateHud(){
   const stars=G.stars,total=stars.reduce((a,b)=>a+b,0);
   if(G.screen==='map'){
-    const done=stars.filter(Boolean).length;
-    tTitle.textContent='Родниково';
-    tSub.textContent=done===0?'Посёлок ждёт воду':done===LEVELS.length?'Весь посёлок восстановлен':`Восстановлено улиц: ${done} из ${LEVELS.length}`;
+    const done=stars.filter(Boolean).length,ci=currentIdx(),need=gateNeed(ci);
+    tTitle.textContent=t('title');
+    tSub.textContent=done===0?t('subStart'):done===LEVELS.length?t('subDone'):t('subProgress',{a:done,b:LEVELS.length});
     tScore.textContent=`★ ${total}/${LEVELS.length*3}`;
-    btnPlay.textContent='Играть · ул. '+LEVELS[currentIdx()].name;
+    btnPlay.textContent=need&&!stars[ci]?t('needStars',{n:need}):t('play',{s:streetName(LEVELS[ci])});
+    btnSound.classList.toggle('off',!sound.on);btnSound.setAttribute('aria-label',t(sound.on?'soundOn':'soundOff'));
   }else{
     const L=G.L,li=G.li;
-    tTitle.textContent='ул. '+LEVELS[li].name;
-    tSub.textContent=`Улица ${li+1} · ${netsText(L.nets)}`;
+    tTitle.textContent=streetName(LEVELS[li]);
+    tSub.textContent=t('streetNo',{i:li+1,nets:netsText(L.nets)});
     tScore.textContent=stars[li]?'★ '+stars[li]+'/3':'★ —';
     const left=Math.max(0,L.limit-G.moves);
-    mvLeft.textContent=left;mvFill.style.width=(left/L.limit*100)+'%';mvBar.classList.toggle('low',left<=3);
+    if(mvLeft.textContent!==String(left)){mvLeft.textContent=left;mvLeft.classList.remove('bump');void mvLeft.offsetWidth;mvLeft.classList.add('bump');}
+    mvFill.style.width=(left/L.limit*100)+'%';mvBar.classList.toggle('low',left<=3);
     const st=starsFor(G.moves);[...mvStars.children].forEach((e,k)=>e.classList.toggle('off',k>=st));
   }
 }
-btnBack.addEventListener('click',()=>{ov.hidden=true;goMap();});
-btnPlay.addEventListener('click',()=>openLevel(currentIdx()));
-btnRestart.addEventListener('click',()=>{if(G.screen==='level')startLevel(G.li);});
+btnBack.addEventListener('click',()=>{ov.hidden=true;sound.play('ui');goMap();});
+btnPlay.addEventListener('click',()=>{const i=currentIdx();sound.play('ui');if(unlocked(i))openLevel(i);else toast(whyLocked(i));});
+btnRestart.addEventListener('click',()=>{if(G.screen==='level'){sound.play('ui');startLevel(G.li);}});
+btnJump.addEventListener('click',()=>{sound.play('ui');mapFocus(currentIdx(),false);});
+btnSound.addEventListener('click',()=>{toast(t(sound.toggle()?'soundOn':'soundOff'));updateHud();});
+ov.addEventListener('click',e=>{if(e.target.closest('button'))sound.play('ui');},true);
 btnHint.addEventListener('click',()=>{
   const L=G.L;
   if(G.screen!=='level'||L.state!=='play')return;
-  fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='play')return;const c=pickHint();if(!c)return;const t=tapsToSolve(c);c.turns+=t;c.rot=c.turns&3;c.hintAt=G.now;G.tut=-1;afterChange();});
+  fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='play')return;const c=pickHint();if(!c)return;const n=tapsToSolve(c);c.turns+=n;c.rot=c.turns&3;c.hintAt=G.now;G.tut=-1;sound.play('hint');afterChange();});
 });
 // На улице труба поворачивается сразу при касании. На карте касание открывает улицу, только если палец
 // не сдвинулся: сдвиг — это прокрутка карты.
@@ -167,7 +189,7 @@ cv.addEventListener('pointerdown',e=>{
   if(!ov.hidden||e.button>0)return;
   const [px,py]=local(e);
   if(G.screen==='level'){tapLevel(px,py);return;}
-  drag={id:e.pointerId,px,py,moved:false};mapGrab(py);
+  G.autoNext=null;drag={id:e.pointerId,px,py,moved:false};mapGrab(py);
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
 });
 cv.addEventListener('pointermove',e=>{
@@ -182,7 +204,7 @@ function endDrag(e,cancel){
   if(cancel||d.moved||G.screen!=='map'||!ov.hidden)return;
   const i=nodeAt(d.px,d.py);
   if(i<0)return;
-  if(unlocked(i))openLevel(i);else toast('Сначала пройди ул. '+LEVELS[i-1].name);
+  if(unlocked(i)){sound.play('open');openLevel(i);}else toast(whyLocked(i));
 }
 cv.addEventListener('pointerup',e=>endDrag(e,false));
 cv.addEventListener('pointercancel',e=>endDrag(e,true));
@@ -205,7 +227,9 @@ window.__rodnikovo={
   level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
     solved:!!(L.res&&L.res.solved),leaks:L.res?L.res.leaks.length:0,conflicts:L.res?L.res.conflicts.length:0,
     board:{x:B.x,y:B.y,S:B.S},
-    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,taps:c.type==='pipe'&&!c.locked?tapsToSolve(c):0}))}:null;},
+    turn:L.turn,
+    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,turns:canTurn(L,c),taps:canTurn(L,c)?tapsToSolve(c):0}))}:null;},
+  lang:()=>lang,
   mapNodes:()=>NODES.map(([x,y])=>{const sx=M.ox+x*M.sc,sy=M.oy+y*M.sc;return {x:sx,y:sy,vis:sx>20&&sx<G.VW-20&&sy>24&&sy<G.VH-24};}),
   mapScroll:()=>M.cy,
   frame:()=>({work:stat(perfBuf),gap:stat(gapBuf)}),
@@ -213,6 +237,7 @@ window.__rodnikovo={
 };
 
 /* ---------- главный цикл ---------- */
+const jumpLabel=(i,up)=>(up?'↑ ':'↓ ')+t('toCurrent',{i:i+1});
 let last=performance.now();
 function loop(t){
   if(sideways.matches){last=t;requestAnimationFrame(loop);return;}
@@ -224,6 +249,8 @@ function loop(t){
     for(const c of L.cells){
       const target=c.turns*Math.PI/2;c.anim+=(target-c.anim)*Math.min(1,dt*16);
       for(const s of c.segs){if(s.reached){if(G.now>=s.fillAt)s.f=Math.min(1,s.f+dt/0.16);}else s.f=Math.max(0,s.f-dt/0.12);}
+      // потребитель только что получил воду, свет или газ: подпрыгивает и звенит
+      if(isLeaf(c.type)){const s=c.segs[0];if(s.f>0.85&&!c.lit){c.lit=true;if(G.now>L.quiet){c.litAt=G.now;sound.play('ok',L.lit++);}}else if(s.f<0.4)c.lit=false;}
     }
     if(L.state==='play'&&L.res)for(const lk of L.res.leaks){
       if(Math.random()>dt*(lk.net==='w'?9:lk.net==='g'?5:6))continue;
@@ -233,7 +260,14 @@ function loop(t){
       else spawn(G.parts,{k:'spark',x:px,y:py,vx:(Math.random()-0.5)*220,vy:(Math.random()-0.5)*220,life:0.22,max:0.22});
     }
   }
-  if(G.screen==='map')updMap(dt);
+  if(G.screen==='map'){
+    updMap(dt);
+    // текущая улица ушла за край экрана — показываем кнопку «к улице»
+    {const ci=currentIdx(),sy=M.oy+NODES[ci][1]*M.sc,off=sy<10||sy>G.VH-10,lab=jumpLabel(ci,sy<10);
+     if(btnJump.hidden===off)btnJump.hidden=!off;if(off&&btnJump.textContent!==lab)btnJump.textContent=lab;}
+    const an=G.autoNext;
+    if(an&&G.now>=an.at&&ov.hidden){G.autoNext=null;if(unlocked(an.i))openLevel(an.i);}
+  }
   G.parts=updParts(G.parts,dt);G.mparts=updParts(G.mparts,dt);
   ctx.setTransform(G.DPR,0,0,G.DPR,0,0);
   if(G.screen==='level'&&L){drawLevel();for(const p of G.parts)drawPart(p);}else drawMap();

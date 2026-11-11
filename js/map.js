@@ -1,20 +1,43 @@
 // Карта посёлка Родниково: дорога с улицами, речка с мостом, кварталы, которые оживают после прохождения.
-// Карта длинная и прокручивается пальцем или колесом мыши: внизу улицы 1–10, выше — 11–20 (газ и теплицы).
+// Карта длинная и прокручивается пальцем или колесом мыши. Она собрана из частей по 10 улиц (глав):
+// первые две нарисованы вручную, следующие строятся сами по образцу второй (со сдвигом вверх и через одну — зеркально).
+// Чтобы добавить главу, достаточно добавить 10 улиц в js/levels.js и строку в THEMES (цвет травы, название, постройка).
 import { mulberry32 } from './core.js';
-import { LEVELS } from './levels.js';
-import { ctx, mixH, rrect, circ, ell, starPath, drawHouse, drawLamp, drawTower, drawTree, drawLock, drawGreenhouse, drawGasTank } from './art.js';
+import { LEVELS, CHAPTER, GATE } from './levels.js';
+import { t } from './i18n.js';
+import { ctx, mixH, rrect, circ, ell, poly, starPath, drawHouse, drawLamp, drawTower, drawTree, drawLock, drawGreenhouse, drawGasTank } from './art.js';
 import { drawPart } from './fx.js';
-import { G, M, unlocked, currentIdx } from './state.js';
+import { G, M, unlocked, currentIdx, gateNeed, chapterStars } from './state.js';
 
 // Карта рисуется в своих координатах: ширина 400, по высоте на экран помещается 720.
+const MAP={w:400,h:720},STEP=600; // STEP — высота одной главы
+const NCH=Math.ceil(LEVELS.length/CHAPTER);
+// Оформление глав: два оттенка травы, ключ названия (js/i18n.js) и постройка главы.
+const THEMES=[
+  {grass:['#97d16f','#7fbb5b']},
+  {grass:['#97d16f','#7fbb5b'],name:'ch2',mark:'gas'},
+  {grass:['#b3d472','#93bd58'],name:'ch3',mark:'well'},
+];
+const theme=c=>THEMES[Math.min(c,THEMES.length-1)];
+// Образец главы — вторая часть посёлка: точки улиц, кварталы (x, y, сторона: −1 — дома левее точки, 1 — правее) и места построек.
+const N1=[[200,640],[295,582],[215,522],[110,492],[185,416],[300,366],[240,296],[125,250],[195,180],[300,118]];
+const D1=[[118,656,-1],[352,604,1],[318,512,1],[54,536,-1],[92,392,-1],[350,404,1],[330,270,1],[54,282,-1],[104,152,-1],[358,160,1]];
+const TN=[[215,55],[105,0],[190,-60],[300,-105],[250,-180],[130,-215],[95,-295],[200,-340],[305,-390],[230,-460]];
+const TD=[[318,40,1],[50,62,-1],[100,-75,-1],[352,-60,1],[340,-200,1],[52,-195,-1],[55,-370,-1],[215,-272,1],[360,-330,1],[320,-470,1]];
+const T_MARK=[262,-28],T_POND=[150,-135],T_BED=[78,-452],T_NAME=[150,104],T_END=[180,-560],T_SIGN=[176,-548];
+// Перенос точки образца в главу c (c ≥ 1): сдвиг вверх, чётные по счёту главы — зеркально.
+const place=(c,[x,y,sd])=>{const m=c%2===0;return [m?MAP.w-x:x,y-(c-1)*STEP,sd==null?undefined:(m?-sd:sd)];};
+export const NODES=N1.slice(),DISTRICTS=D1.slice();
+const MARKS=[],PONDS=[],BEDS=[[60,611]],NAMES=[];
+for(let c=1;c<NCH;c++){
+  const n=Math.min(CHAPTER,LEVELS.length-c*CHAPTER);
+  for(let k=0;k<n;k++){NODES.push(place(c,TN[k]).slice(0,2));DISTRICTS.push(place(c,TD[k]));}
+  const th=theme(c),[mx,my]=place(c,T_MARK),[px,py]=place(c,T_POND),[bx,by]=place(c,T_BED),[nx,ny]=place(c,T_NAME);
+  MARKS.push({x:mx,y:my,kind:th.mark,c});PONDS.push([px,py]);BEDS.push([bx,by]);if(th.name)NAMES.push({x:nx,y:ny,key:th.name});
+}
+const LAST=Math.max(1,NCH-1),ROAD_END=place(LAST,T_END),SIGN=place(LAST,T_SIGN);
 // Мир тянется от WORLD.top (верх, конец дороги) до WORLD.bottom (въезд в посёлок).
-const MAP={w:400,h:720},WORLD={top:-610,bottom:720};
-export const NODES=[[200,640],[295,582],[215,522],[110,492],[185,416],[300,366],[240,296],[125,250],[195,180],[300,118],
-  [215,55],[105,0],[190,-60],[300,-105],[250,-180],[130,-215],[95,-295],[200,-340],[305,-390],[230,-460]];
-// Кварталы у каждой улицы: x, y, сторона (−1 — дома левее точки, 1 — правее).
-export const DISTRICTS=[[118,656,-1],[352,604,1],[318,512,1],[54,536,-1],[92,392,-1],[350,404,1],[330,270,1],[54,282,-1],[104,152,-1],[358,160,1],
-  [318,40,1],[50,62,-1],[100,-75,-1],[352,-60,1],[340,-200,1],[52,-195,-1],[55,-370,-1],[215,-272,1],[360,-330,1],[320,-470,1]];
-const ROAD_END=[180,-560],SIGN=[176,-548],GAS=[262,-28],POND=[150,-135],BED2=[78,-452];
+const WORLD={top:-610-(LAST-1)*STEP,bottom:720};
 function catmull(pts,seg){const out=[];for(let i=0;i<pts.length-1;i++){const p0=pts[Math.max(0,i-1)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(pts.length-1,i+2)];for(let k=0;k<seg;k++){const t=k/seg,t2=t*t,t3=t2*t;const f=j=>0.5*((2*p1[j])+(-p0[j]+p2[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(-p0[j]+3*p1[j]-3*p2[j]+p3[j])*t3);out.push({x:f(0),y:f(1),seg:i});}}const e=pts[pts.length-1];out.push({x:e[0],y:e[1],seg:pts.length-2});return out;}
 const SEG=16;
 const ROAD=catmull([[300,722],...NODES,ROAD_END],SEG);
@@ -23,19 +46,20 @@ const CROSS_A=Math.atan2(CROSS2.y-CROSS.y,CROSS2.x-CROSS.x);
 const RIVER=catmull([[-60,CROSS.y+30],[-10,CROSS.y+22],[CROSS.x-80,CROSS.y+6],[CROSS.x,CROSS.y],[CROSS.x+90,CROSS.y+16],[CROSS.x+180,CROSS.y-6],[430,CROSS.y+8],[470,CROSS.y+4]],SEG);
 const TOWER=[348,700];
 const mrng=mulberry32(4242);
-const BLOBS=[];for(let k=0;k<90;k++)BLOBS.push({x:-160+mrng()*720,y:-60+mrng()*840,r:18+mrng()*46,c:mrng()<0.5?'#97d16f':'#7fbb5b'});
-for(let k=0;k<80;k++)BLOBS.push({x:-160+mrng()*720,y:WORLD.top-40+mrng()*(-20-WORLD.top),r:18+mrng()*46,c:mrng()<0.5?'#97d16f':'#7fbb5b'});
+// Пятна травы: у каждой главы свои оттенки.
+const BLOBS=[];for(let k=0;k<90;k++)BLOBS.push({x:-160+mrng()*720,y:-60+mrng()*840,r:18+mrng()*46,c:theme(0).grass[mrng()<0.5?0:1]});
+for(let c=1;c<NCH;c++){const top=-650-(c-1)*STEP,g=theme(c).grass;for(let k=0;k<80;k++)BLOBS.push({x:-160+mrng()*720,y:top+mrng()*(STEP+30),r:18+mrng()*46,c:g[mrng()<0.5?0:1]});}
 const TREES=[];
 {const near=(arr,x,y,d)=>arr.some(p=>(p.x-x)**2+(p.y-y)**2<d*d);
  const free=(x,y)=>!(near(ROAD,x,y,26)||near(RIVER,x,y,32)||
    NODES.some(n=>(n[0]-x)**2+(n[1]-y)**2<34*34)||DISTRICTS.some(d=>(d[0]-x)**2+(d[1]-y)**2<50*50)||
-   (TOWER[0]-x)**2+(TOWER[1]-y)**2<44*44||(x<100&&y>570&&y<640)||
-   (GAS[0]-x)**2+(GAS[1]-y)**2<48*48||((POND[0]-x)/62)**2+((POND[1]-y)/38)**2<1||
-   (x>BED2[0]-48&&x<BED2[0]+50&&y>BED2[1]-30&&y<BED2[1]+34)||(x>SIGN[0]-40&&x<SIGN[0]+44&&y>SIGN[1]-36&&y<SIGN[1]+14)||
+   (TOWER[0]-x)**2+(TOWER[1]-y)**2<44*44||MARKS.some(m=>(m.x-x)**2+(m.y-y)**2<48*48)||
+   PONDS.some(p=>((p[0]-x)/62)**2+((p[1]-y)/38)**2<1)||BEDS.some(b=>Math.abs(b[0]-x)<50&&Math.abs(b[1]-y)<32)||
+   NAMES.some(n=>Math.abs(n.x-x)<52&&y>n.y-52&&y<n.y+14)||(x>SIGN[0]-40&&x<SIGN[0]+44&&y>SIGN[1]-36&&y<SIGN[1]+14)||
    TREES.some(t=>(t.x-x)**2+(t.y-y)**2<22*22));
- // нижняя часть (улицы 1–10) и верхняя (11–20); сверху — лес, где карта заканчивается
  for(let k=0;k<400&&TREES.length<30;k++){const x=14+mrng()*372,y=24+mrng()*690;if(free(x,y))TREES.push({x,y,s:30+mrng()*16,v:Math.floor(mrng()*99)});}
- for(let k=0;k<500&&TREES.length<62;k++){const x=14+mrng()*372,y=WORLD.top+70+mrng()*(30-WORLD.top-70);if(free(x,y))TREES.push({x,y,s:30+mrng()*16,v:Math.floor(mrng()*99)});}
+ for(let c=1;c<NCH;c++){const top=-540-(c-1)*STEP,want=TREES.length+32;for(let k=0;k<500&&TREES.length<want;k++){const x=14+mrng()*372,y=top+mrng()*(STEP-30);if(free(x,y))TREES.push({x,y,s:30+mrng()*16,v:Math.floor(mrng()*99)});}}
+ // сверху — лес, где карта заканчивается
  for(let k=0;k<26;k++){const x=6+k*15.5+mrng()*6,y=WORLD.top+24+mrng()*34;if(Math.abs(x-ROAD_END[0])>36)TREES.push({x,y,s:34+mrng()*14,v:3*Math.floor(mrng()*30)});}
 }
 // Насколько «ожил» квартал: 0 — серый, 1 — цветной. Только что пройденная улица оживает плавно.
@@ -89,9 +113,8 @@ export function drawMap(){
   const inView=(y,up,down)=>y+down>y0&&y-up<y1; // рисуем только то, что видно
   ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);
   ctx.globalAlpha=0.55;for(const b of BLOBS)if(inView(b.y,b.r,b.r))circ(b.x,b.y,b.r,b.c);ctx.globalAlpha=1;
-  if(inView(BED2[1],30,30))drawBed(BED2[0]-42,BED2[1]-23);
-  if(inView(POND[1],40,40))drawPond(POND[0],POND[1],now);
-  if(inView(611,30,30))drawBed(18,588);
+  for(const [bx,by] of BEDS)if(inView(by,30,30))drawBed(bx-42,by-23);
+  for(const [px,py] of PONDS)if(inView(py,40,40))drawPond(px,py,now);
   ctx.lineCap='round';ctx.lineJoin='round';
   strokeLine(ROAD);
   ctx.save();ctx.translate(2,4);ctx.strokeStyle='rgba(40,70,25,.22)';ctx.lineWidth=28;ctx.stroke();ctx.restore();
@@ -124,13 +147,16 @@ export function drawMap(){
     if(nets.includes('e'))add(ay+16,()=>drawLamp(ax-30*sd,ay+16,46,{on:lf>0.95,f:lf>0.95?1:0}));
   });
   add(TOWER[1],()=>drawTower(TOWER[0],TOWER[1],78));
-  add(GAS[1],()=>drawGasTank(GAS[0],GAS[1],74));
-  objs.push({y:704,f:()=>{
-    ctx.fillStyle='#7a4f26';ctx.fillRect(56,684,4,22);ctx.fillRect(104,684,4,22);
-    ctx.fillStyle='#c98f52';rrect(42,666,80,24,5);ctx.fill();ctx.strokeStyle='#7a4f26';ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle='#3d2a14';ctx.font='800 11px Nunito, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Родниково',82,679);
-  }});
+  for(const m of MARKS)add(m.y,()=>drawMark(m));
+  for(const n of NAMES)add(n.y,()=>drawBoard(n.x,n.y,[t(n.key)],108));
+  add(706,()=>drawBoard(82,706,[t('sign')],80));
   objs.sort((a,b)=>a.y-b.y);for(const o of objs)o.f();
+  // тени облаков медленно плывут над посёлком
+  for(let k=0;k<3;k++){
+    const cx=((now*0.006+k*190)%620)-110,cy=y0+((k*0.37+0.12)%1)*vh+Math.sin(now/9000+k)*14;
+    ctx.fillStyle='rgba(26,60,30,.075)';
+    for(const [dx,dy,r] of [[0,0,46],[44,8,34],[-40,10,30],[10,-16,30]]){ctx.beginPath();ctx.ellipse(cx+dx,cy+dy,r*1.25,r*0.62,0,0,Math.PI*2);ctx.fill();}
+  }
   const ci=currentIdx();
   NODES.forEach(([x,y],i)=>{
     if(!inView(y,30,40))return;
@@ -143,6 +169,12 @@ export function drawMap(){
     ctx.fillStyle=st?'#24322b':cur?'#ffffff':'#857d6a';ctx.fillText(String(i+1),x,y+1);
     if(!un){ctx.save();ctx.translate(x+12,y-12);drawLock(0,0,40);ctx.restore();}
     if(st)for(let k=0;k<3;k++){starPath(x-13+k*13,y+25,6.5,0);ctx.fillStyle=k<st?'#ffc83d':'#e7dfca';ctx.fill();ctx.strokeStyle='#8a6a1e';ctx.lineWidth=1.2;ctx.stroke();}
+    // ворота главы: сколько звёзд набрано в прошлой части из нужных
+    if(!un&&i>0&&stars[i-1]>0&&gateNeed(i)){
+      const txt=`★ ${chapterStars(i/CHAPTER-1)}/${GATE}`;
+      ctx.font='800 11px Nunito, system-ui, sans-serif';const w=ctx.measureText(txt).width+14;
+      ctx.fillStyle='rgba(20,32,26,.82)';rrect(x-w/2,y+21,w,18,9);ctx.fill();ctx.fillStyle='#ffc83d';ctx.fillText(txt,x,y+30.5);
+    }
   });
   for(const p of G.mparts)drawPart(p);
   // верхний край карты тонет в дымке
@@ -162,10 +194,45 @@ function drawPond(x,y,now){
   for(const [dx,dy,l] of [[-20,-8,14],[10,6,10],[22,-12,8]]){const o=Math.sin(now/900+dx)*3;ctx.beginPath();ctx.moveTo(x+dx+o,y+dy);ctx.lineTo(x+dx+o+l,y+dy);ctx.stroke();}
   for(const [dx,dy] of [[-52,8],[-46,14],[48,10],[54,2]]){ctx.strokeStyle='#4f8a3a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+dx,y+dy);ctx.lineTo(x+dx-2,y+dy-16);ctx.stroke();ell(x+dx-2,y+dy-17,2.4,5,'#7a5232');}
 }
+// Деревянная табличка на двух столбиках: название посёлка или его части.
+function drawBoard(x,y,lines,w){
+  const h=lines.length>1?24:22;
+  ctx.fillStyle='#7a4f26';ctx.fillRect(x-w/2+12,y-22,4,22);ctx.fillRect(x+w/2-16,y-22,4,22);
+  ctx.fillStyle='rgba(40,70,25,.25)';rrect(x-w/2+2,y-18-h+3,w,h,5);ctx.fill();
+  ctx.fillStyle='#c98f52';rrect(x-w/2,y-18-h,w,h,5);ctx.fill();ctx.strokeStyle='#7a4f26';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.22)';rrect(x-w/2+3,y-18-h+3,w-6,4,2);ctx.fill();
+  ctx.fillStyle='#3d2a14';ctx.textAlign='center';ctx.textBaseline='middle';
+  let fs=lines.length>1?10:11;ctx.font=`800 ${fs}px Nunito, system-ui, sans-serif`;
+  while(fs>7&&Math.max(...lines.map(l=>ctx.measureText(l).width))>w-10){fs-=0.5;ctx.font=`800 ${fs}px Nunito, system-ui, sans-serif`;}
+  lines.forEach((l,k)=>ctx.fillText(l,x,y-18-h/2+(lines.length>1?(k?5.5:-4.5):1)));
+}
+// Постройка главы: газгольдер, колодец-журавль…
+function drawMark(m){
+  if(m.kind==='gas')drawGasTank(m.x,m.y,74);
+  else if(m.kind==='well')drawWell(m.x-14,m.y+24,G.stars[m.c*CHAPTER]?1:0.45);
+}
+// Колодец-журавль: сруб с крышей-навесом, длинный шест с ведром.
+function drawWell(x,y,lf){
+  const wood=mixH('#9a9a94','#a8743f',lf),dark=mixH('#77776f','#7a4f26',lf),roof=mixH('#8d8d88','#b5533c',lf);
+  ell(x+4,y+3,34,11,'rgba(30,60,20,.26)');
+  // журавль: стойка и шест с противовесом
+  ctx.strokeStyle=dark;ctx.lineCap='round';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x+30,y);ctx.lineTo(x+30,y-46);ctx.stroke();
+  ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+46,y-36);ctx.lineTo(x-2,y-58);ctx.stroke();
+  ctx.fillStyle=dark;ctx.fillRect(x+41,y-40,9,9);
+  ctx.strokeStyle='#5a4a36';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x-2,y-58);ctx.lineTo(x-2,y-30);ctx.stroke();
+  poly([[x-7,y-30],[x+3,y-30],[x+1.5,y-21],[x-5.5,y-21]],mixH('#9aa0a6','#7fa9c9',lf));
+  // сруб
+  ctx.fillStyle=wood;rrect(x-17,y-18,30,20,3);ctx.fill();
+  ctx.strokeStyle=dark;ctx.lineWidth=1.3;for(let k=1;k<4;k++){ctx.beginPath();ctx.moveTo(x-17,y-18+k*5);ctx.lineTo(x+13,y-18+k*5);ctx.stroke();}
+  ell(x-2,y-18,15,4.5,dark);ell(x-2,y-18,12,3.2,lf>0.9?'#4ea3e3':'#5f6d75');
+  // навес
+  ctx.fillStyle=dark;ctx.fillRect(x-16,y-40,3,22);ctx.fillRect(x+9,y-40,3,22);
+  poly([[x-23,y-38],[x-2,y-52],[x+19,y-38]],roof);poly([[x-23,y-38],[x+19,y-38],[x+17,y-35],[x-21,y-35]],mixH(roof,'#000000',0.2));
+}
 // Конец дороги: шлагбаум и табличка «Скоро новые улицы».
 function drawSoon(x,y){
   ctx.fillStyle='#7a4f26';ctx.fillRect(x-30,y-28,4,30);ctx.fillRect(x+26,y-28,4,30);
   ctx.fillStyle='#c98f52';rrect(x-38,y-46,76,24,5);ctx.fill();ctx.strokeStyle='#7a4f26';ctx.lineWidth=2;ctx.stroke();
-  ctx.fillStyle='#3d2a14';ctx.font='800 10px Nunito, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Скоро',x,y-39);ctx.fillText('новые улицы',x,y-29);
+  ctx.fillStyle='#3d2a14';ctx.font='800 10px Nunito, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t('soon1'),x,y-39);ctx.fillText(t('soon2'),x,y-29);
   for(let k=0;k<5;k++){ctx.fillStyle=k%2?'#ffffff':'#e0533d';ctx.fillRect(x-30+k*12,y-12,12,6);}
 }
