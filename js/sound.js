@@ -67,6 +67,7 @@ const S={
   win:()=>{[0,2,3,5].forEach((k,i)=>marimba(PENTA[k],0.15,i*0.16,0.8));marimba(PENTA[0]/2,0.12,0.64,1.1);chirp(0.04,1.0);},
   star:n=>{bell(1046.5*[1,1.25,1.5][n%3],0.08);},
   fail:()=>{marimba(392,0.14,0,0.7);marimba(329.63,0.14,0.24,0.9);},
+  hatch:()=>{knock(700,0.16);knock(950,0.1,0.07);},
   open:()=>{marimba(PENTA[0],0.11);marimba(PENTA[3],0.11,0.12);},
   bird:()=>{chirp(0.03);if(Math.random()<0.5)chirp(0.025,0.5);},
 };

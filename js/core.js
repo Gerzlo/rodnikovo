@@ -6,10 +6,26 @@ export const LEAF = { w: 'house', e: 'lamp', g: 'greenhouse' };
 export const isLeaf = t => t === 'house' || t === 'lamp' || t === 'greenhouse';
 
 // Можно ли крутить клетку: трубу без замка — всегда; ввод дома, фонаря или теплицы — на улицах с turn:'leaf'.
-// Ржавая труба (left — сколько поворотов ей осталось) при нуле больше не крутится.
-export const canTurn = (L, c) => c.left === 0 ? false : c.type === 'pipe' ? !c.locked : L.turn === 'leaf' && isLeaf(c.type);
+// Ржавая труба (left — сколько поворотов ей осталось) при нуле больше не крутится. Труба под люком (hidden) — тоже.
+export const canTurn = (L, c) => c.hidden || c.left === 0 ? false : c.type === 'pipe' ? !c.locked : L.turn === 'leaf' && isLeaf(c.type);
 // Тупик: какой-то ржавой трубе уже не хватит поворотов, чтобы встать правильно.
 export const isStuck = L => L.cells.some(c => c.left != null && tapsToSolve(c) > c.left);
+
+// Люки: труба под люком открывается, когда вода, ток или газ дошли до соседней клетки (вызывать после evaluate).
+// Возвращает клетки, которые только что открылись.
+export function openHatches(L){
+  const out=[];
+  for(const c of L.cells){
+    if(!c.hidden)continue;
+    for(let d=0;d<4;d++){
+      const x=c.x+DX[d],y=c.y+DY[d];
+      if(x<0||y<0||x>=L.W||y>=L.H)continue;
+      if(L.cells[y*L.W+x].segs.some(s=>s.reached)){out.push(c);break;}
+    }
+  }
+  for(const c of out)c.hidden=false;
+  return out;
+}
 
 // Направления: 0 — север, 1 — восток, 2 — юг, 3 — запад. Маска клетки — набор открытых сторон (биты 1, 2, 4, 8).
 export const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0], BIT = [1, 2, 4, 8];
@@ -158,8 +174,19 @@ function tryGen(cfg,rng){
       if(rp.length<nR)continue;
       for(let k=0;k<nR;k++){const j=ri(rp.length),c=rp[j];c.left=tapsToSolve(c)+ri(2);rp.splice(j,1);}
     }
-    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,turn,rusty:nR,
-      cells:cells.map((c,i)=>({x:c.x,y:c.y,type:c.type,segs:c.segs.map(s=>({net:s.net,mask:s.mask})),rot:c.rot,locked:c.locked,shared:c.shared,left:c.left,v:(i*37+ri(997))%997})),
+    // люки: доля труб спрятана под землёй. Не рядом с клеткой, куда вода или ток доходят с самого начала
+    // (иначе люк откроется сразу), и не ржавые и не рядом с ржавыми (там считают повороты — соседей должно быть видно).
+    const hf=cfg.hidden||0;let nH=0;
+    if(hf){
+      for(const c of cells)c.hidden=false;
+      const nb=(c,f)=>[0,1,2,3].some(d=>{const n=at(c.x+DX[d],c.y+DY[d]);return n&&f(n);});
+      const hp=pipes.filter(c=>!c.locked&&c.left==null&&!nb(c,n=>n.left!=null||n.segs.some(s=>s.reached)));
+      nH=Math.round(pipes.length*hf);
+      if(hp.length<nH)continue;
+      for(let k=0;k<nH;k++){const j=ri(hp.length);hp[j].hidden=true;hp.splice(j,1);}
+    }
+    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,turn,rusty:nR,hatches:nH,
+      cells:cells.map((c,i)=>({x:c.x,y:c.y,type:c.type,segs:c.segs.map(s=>({net:s.net,mask:s.mask})),rot:c.rot,locked:c.locked,shared:c.shared,left:c.left,hidden:c.hidden||undefined,v:(i*37+ri(997))%997})),
       minTaps:taps,limit:taps+slack,t3:taps+Math.floor(slack/3),t2:taps+Math.floor(slack*2/3)};
   }
   return null;

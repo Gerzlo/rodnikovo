@@ -51,16 +51,26 @@ function drawTube(p,w,net,f){
     if(f>0.05){ctx.save();ctx.setLineDash([w*0.25,w*1.8]);ctx.lineDashOffset=-now*0.09;ctx.strokeStyle=`rgba(255,255,235,${0.95*f})`;ctx.lineWidth=w*0.32;ctx.stroke(p);ctx.restore();}
   }
 }
+// Ржавчина на самой трубе: рыжие пятна-кольца и тёмные крапины, чтобы ржавую трубу было видно с первого взгляда.
+function drawRust(p,w,net,v){
+  const k=net==='e'?0.62:0.76;
+  ctx.save();ctx.lineCap='butt';
+  ctx.setLineDash([w*0.42,w*0.5,w*0.2,w*0.7]);ctx.lineDashOffset=(v%7)*w*0.21;ctx.strokeStyle='rgba(166,82,30,.88)';ctx.lineWidth=w*k;ctx.stroke(p);
+  ctx.setLineDash([w*0.16,w*0.95,w*0.26,w*0.6]);ctx.lineDashOffset=(v%5)*w*0.3+w*0.3;ctx.strokeStyle='rgba(98,44,16,.8)';ctx.lineWidth=w*k*0.55;ctx.stroke(p);
+  ctx.restore();
+  strokeOff(p,-w*0.1,-w*0.13,'rgba(255,225,190,.3)',w*0.14);
+}
+const FIT_RUST=['#a8683a','#5e3519'];
 const FIT={w:[1.36,'#c99a4b','#7d5a26'],e:[1.75,'#3a3f47','#22262c'],g:[1.4,'#8c7b6e','#4f4038']};
-function drawFittings(s,w,S,h,hub){
+function drawFittings(s,w,S,h,hub,rust){
   const ft=S*0.075;
   for(let d=0;d<4;d++){
     if(!(s.mask&BIT[d]))continue;
     const cx=DX[d]*(h-ft/2),cy=DY[d]*(h-ft/2),ns=d%2===0;
     const k=FIT[s.net],aw=w*k[0];
     const rw=ns?aw:ft,rh=ns?ft:aw;
-    ctx.fillStyle=k[1];rrect(cx-rw/2,cy-rh/2,rw,rh,Math.min(rw,rh)*0.35);ctx.fill();
-    ctx.strokeStyle=k[2];ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle=rust?FIT_RUST[0]:k[1];rrect(cx-rw/2,cy-rh/2,rw,rh,Math.min(rw,rh)*0.35);ctx.fill();
+    ctx.strokeStyle=rust?FIT_RUST[1]:k[2];ctx.lineWidth=1;ctx.stroke();
   }
   if(hub){
     if(s.net==='w'){circ(0,0,w*0.68,'#7d5a26');circ(0,0,w*0.58,'#cfa152');const o=offv(-w*0.15,-w*0.18);circ(o[0],o[1],w*0.2,'rgba(255,255,255,.45)');}
@@ -84,7 +94,8 @@ function drawCellPipes(c,x0,y0,S){
     const w=S*TUBE_W[s.net];
     if(c.shared==='bridge'&&i>0)strokeOff(p,S*0.06,S*0.11,'rgba(10,30,10,.35)',w*1.7);
     drawTube(p,w,s.net,s.f);
-    drawFittings(s,w,S,h,bitCount(s.mask)>=3&&c.type!=='src');
+    if(c.left!=null)drawRust(p,w,s.net,c.v+i*3);
+    drawFittings(s,w,S,h,bitCount(s.mask)>=3&&c.type!=='src',c.left!=null);
   }
   ctx.restore();
 }
@@ -152,6 +163,22 @@ function drawRustCount(x,y,S,n,t){
   circ(x,y+r*0.16,r*pop,'rgba(20,40,20,.28)');circ(x,y,r*pop,n>0?'#fff4e2':'#5a3a28');
   ctx.strokeStyle=n>0?'#a3562a':'#2e1c12';ctx.lineWidth=Math.max(1,r*0.16);ctx.beginPath();ctx.arc(x,y,r*pop,0,Math.PI*2);ctx.stroke();
   ctx.fillStyle=n>0?'#8a3f18':'#d9b9a0';ctx.font=`800 ${Math.round(r*1.45)}px Nunito, system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(n),x,y+r*0.08);
+}
+// Люк: чугунная крышка, под которой спрятана труба. k — насколько открыт (0 — закрыт, 1 — исчез), wig — когда по нему стукнули.
+function drawHatch(x,y,S,k,wig){
+  const r=S*0.37;
+  ctx.save();ctx.translate(x+S/2,y+S/2-k*S*0.3);
+  if(wig){const t=(G.now-wig)/320;if(t<1)ctx.rotate(Math.sin(t*Math.PI*6)*0.1*(1-t));}
+  ctx.globalAlpha=1-k;ctx.scale(1+k*0.3,1+k*0.3);
+  circ(0,r*0.13,r*1.1,'rgba(20,45,18,.32)');
+  circ(0,0,r*1.1,'#7b7566');circ(0,0,r,'#474c52');circ(0,-r*0.05,r*0.9,'#8d949b');
+  ctx.save();ctx.beginPath();ctx.arc(0,-r*0.05,r*0.78,0,Math.PI*2);ctx.clip();
+  ctx.strokeStyle='rgba(58,64,70,.8)';ctx.lineWidth=Math.max(1,r*0.1);
+  for(let i=-3;i<=3;i++){ctx.beginPath();ctx.moveTo(i*r*0.36-r,-r);ctx.lineTo(i*r*0.36+r,r);ctx.moveTo(i*r*0.36+r,-r);ctx.lineTo(i*r*0.36-r,r);ctx.stroke();}
+  ctx.restore();
+  ctx.strokeStyle='#474c52';ctx.lineWidth=Math.max(1,r*0.09);ctx.beginPath();ctx.arc(0,-r*0.05,r*0.78,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=Math.max(1,r*0.07);ctx.beginPath();ctx.arc(0,-r*0.05,r*0.9,Math.PI*1.05,Math.PI*1.6);ctx.stroke();
+  ctx.restore();
 }
 function drawTile(c,x,y,S){
   const g=Math.max(1.5,S*0.035),r=S*0.16;
@@ -222,7 +249,12 @@ export function drawLevel(){
     setCtx(oc);oc.setTransform(G.DPR,0,0,G.DPR,0,0);drawStatic();setCtx(main);
   }
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(bgCv,0,0);ctx.restore();
-  for(const c of L.cells)if(c.segs.length)drawCellPipes(c,bx+c.x*S,by+c.y*S,S);
+  for(const c of L.cells)if(c.segs.length&&!c.hidden)drawCellPipes(c,bx+c.x*S,by+c.y*S,S);
+  // люки: закрытые лежат на месте, только что открытый отлетает и тает
+  for(const c of L.cells){
+    if(c.hidden)drawHatch(bx+c.x*S,by+c.y*S,S,0,c.wig);
+    else if(c.openAt&&now-c.openAt<380)drawHatch(bx+c.x*S,by+c.y*S,S,(now-c.openAt)/380,0);
+  }
   const res=L.res;
   if(res&&L.state==='play')for(const lk of res.leaks)if(lk.net==='w'){
     const px=bx+(lk.x+0.5+DX[lk.d]*0.5)*S,py=by+(lk.y+0.5+DY[lk.d]*0.5)*S;

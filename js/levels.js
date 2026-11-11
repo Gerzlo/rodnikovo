@@ -3,7 +3,8 @@
 // seed — зерно (улица одинакова у всех);
 // blocks — камни и деревья; locked — трубы с замком; bridges — мостики; doubles — двойные клетки;
 // intro — карточка с новым правилом перед первым прохождением (тексты — в js/i18n.js: i_<key>_t и i_<key>_p);
-// en — название по-английски; turn:'leaf' — крутятся и вводы домов, фонарей, теплиц; slack — запас ходов (обычно 0.35).
+// en — название по-английски; turn:'leaf' — крутятся и вводы домов, фонарей, теплиц; slack — запас ходов (обычно 0.35);
+// rusty — сколько ржавых труб; hidden — доля труб под люками.
 // Улицы идут главами по 10. Сложность подбирается командой node tools/rate.js find (см. docs/plan-100.md).
 export const LEVELS=[
   {name:'Садовая', en:'Garden',     w:4,h:4, nets:['w'], seed:3,
@@ -56,6 +57,17 @@ export const LEVELS=[
   {name:'Паровозная', en:'Locomotive',  w:6,h:8, nets:['w'], seed:38, turn:'leaf', rusty:6, slack:0.25},
   {name:'Станционная', en:'Station',    w:6,h:8, nets:['w','e','g'], seed:39, turn:'leaf', rusty:6, slack:0.25, doubles:2},
   {name:'Вокзальная', en:'Terminal',    w:6,h:8, nets:['w','e'], seed:161, turn:'leaf', rusty:8, slack:0.2, bridges:1, doubles:1},
+  // Глава 5. Подгорье: трубы под землёй (hidden — какая доля труб спрятана под люками).
+  {name:'Подгорная', en:'Foothill',     w:5,h:5, nets:['w'], seed:42, hidden:0.2, slack:0.25, intro:{tag:'tagNew',key:'hatch'}},
+  {name:'Песчаная', en:'Sandy',         w:5,h:6, nets:['w'], seed:41, hidden:0.25, slack:0.25, blocks:2},
+  {name:'Каменная', en:'Stone',         w:6,h:6, nets:['w','e'], seed:45, hidden:0.25, slack:0.25, blocks:3},
+  {name:'Глиняная', en:'Clay',          w:6,h:6, nets:['w'], seed:41, turn:'leaf', hidden:0.25, slack:0.25},
+  {name:'Карьерная', en:'Quarry',       w:6,h:7, nets:['w','g'], seed:41, hidden:0.3, slack:0.25, bridges:1},
+  {name:'Ключевая', en:'Spring',        w:6,h:7, nets:['w','e'], seed:90, turn:'leaf', hidden:0.3, slack:0.25, locked:2},
+  {name:'Родниковая', en:'Wellspring',  w:6,h:7, nets:['w','e','g'], seed:46, hidden:0.3, slack:0.25, rusty:4},
+  {name:'Пещерная', en:'Cave',          w:6,h:8, nets:['w'], seed:41, turn:'leaf', hidden:0.3, slack:0.25, blocks:2},
+  {name:'Горная', en:'Mountain',        w:6,h:8, nets:['w','e','g'], seed:46, turn:'leaf', hidden:0.35, slack:0.25, doubles:2},
+  {name:'Нагорная', en:'Hilltop',       w:6,h:8, nets:['w','e'], seed:92, turn:'leaf', hidden:0.35, slack:0.25, rusty:5, bridges:2},
 ];
 // Главы: по 10 улиц. Следующая глава открывается, когда в предыдущей набрано GATE звёзд из 30.
 export const CHAPTER=10, GATE=18;

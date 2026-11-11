@@ -1,5 +1,5 @@
 // Главный модуль: экраны, кнопки, касания, ход игры и главный цикл.
-import { DX, DY, tapsToSolve, evaluate, generate, isLeaf, canTurn, isStuck } from './core.js';
+import { DX, DY, tapsToSolve, evaluate, generate, isLeaf, canTurn, isStuck, openHatches } from './core.js';
 import { LEVELS, CHAPTER, GATE } from './levels.js';
 import { G, B, M, unlocked, currentIdx, gateNeed, chapterStars } from './state.js';
 import { t, lang, streetName, netsText } from './i18n.js';
@@ -37,6 +37,8 @@ function levelData(i){if(!genCache[i])genCache[i]=generate(LEVELS[i]);return gen
 // Пересчитать, куда дошли вода и ток. Новые участки заполняются по очереди — вода «бежит» по трубам.
 function refresh(){
   const L=G.L,r=evaluate(L);L.res=r;
+  // вода, ток или газ дошли до клетки рядом с люком — люк открывается
+  {const op=openHatches(L);for(const c of op)c.openAt=G.now;if(op.length&&G.now>L.quiet)sound.play('hatch');}
   const newly=[];let minD=1e9;
   for(const c of L.cells)for(const s of c.segs){if(s.reached&&!s.was){newly.push(s);if(s.depth<minD)minD=s.depth;}s.was=s.reached;}
   for(const s of newly)s.fillAt=G.now+(s.depth-minD)*75;
@@ -68,6 +70,7 @@ function tapLevel(px,py){
   const gx=Math.floor((px-B.x)/B.S),gy=Math.floor((py-B.y)/B.S);
   if(gx<0||gy<0||gx>=L.W||gy>=L.H)return;
   const c=L.cells[gy*L.W+gx];
+  if(c.hidden){c.wig=G.now;sound.play('stuck');return;}
   if(!canTurn(L,c)){if(c.type==='pipe'){c.wig=G.now;sound.play('stuck');}return;}
   if(c.left>0)c.left--;
   c.turns++;c.rot=c.turns&3;c.pop=G.now;G.moves++;G.tut=-1;sound.play('turn');
@@ -231,11 +234,11 @@ const stat=a=>{if(!a.length)return null;const s=a.slice().sort((p,q)=>p-q);retur
 window.__rodnikovo={
   screen:()=>G.screen,
   stars:()=>G.stars.slice(),
-  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,rusty:L.rusty||0,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
+  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,rusty:L.rusty||0,hatches:L.hatches||0,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
     solved:!!(L.res&&L.res.solved),leaks:L.res?L.res.leaks.length:0,conflicts:L.res?L.res.conflicts.length:0,
     board:{x:B.x,y:B.y,S:B.S},
     turn:L.turn,
-    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,left:c.left==null?null:c.left,turns:canTurn(L,c),taps:canTurn(L,c)?tapsToSolve(c):0}))}:null;},
+    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,left:c.left==null?null:c.left,hidden:!!c.hidden,turns:canTurn(L,c),taps:canTurn(L,c)?tapsToSolve(c):0}))}:null;},
   lang:()=>lang,
   sound:()=>soundState(),
   mapNodes:()=>NODES.map(([x,y])=>{const sx=M.ox+x*M.sc,sy=M.oy+y*M.sc;return {x:sx,y:sy,vis:sx>20&&sx<G.VW-20&&sy>24&&sy<G.VH-24};}),

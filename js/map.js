@@ -18,6 +18,7 @@ const THEMES=[
   {grass:['#97d16f','#7fbb5b'],name:'ch2',mark:'gas'},
   {grass:['#b3d472','#93bd58'],name:'ch3',mark:'well'},
   {grass:['#a3c98a','#86b06c'],name:'ch4',mark:'factory'},
+  {grass:['#b9cf8a','#9db56e'],name:'ch5',mark:'spring'},
 ];
 const theme=c=>THEMES[Math.min(c,THEMES.length-1)];
 // Образец главы — вторая часть посёлка: точки улиц, кварталы (x, y, сторона: −1 — дома левее точки, 1 — правее) и места построек.
@@ -152,12 +153,6 @@ export function drawMap(){
   for(const n of NAMES)add(n.y,()=>drawBoard(n.x,n.y,[t(n.key)],108));
   add(706,()=>drawBoard(82,706,[t('sign')],80));
   objs.sort((a,b)=>a.y-b.y);for(const o of objs)o.f();
-  // тени облаков медленно плывут над посёлком
-  for(let k=0;k<3;k++){
-    const cx=((now*0.006+k*190)%620)-110,cy=y0+((k*0.37+0.12)%1)*vh+Math.sin(now/9000+k)*14;
-    ctx.fillStyle='rgba(26,60,30,.075)';
-    for(const [dx,dy,r] of [[0,0,46],[44,8,34],[-40,10,30],[10,-16,30]]){ctx.beginPath();ctx.ellipse(cx+dx,cy+dy,r*1.25,r*0.62,0,0,Math.PI*2);ctx.fill();}
-  }
   const ci=currentIdx();
   NODES.forEach(([x,y],i)=>{
     if(!inView(y,30,40))return;
@@ -212,6 +207,24 @@ function drawMark(m){
   if(m.kind==='gas')drawGasTank(m.x,m.y,74);
   else if(m.kind==='well')drawWell(m.x-14,m.y+24,G.stars[m.c*CHAPTER]?1:0.45);
   else if(m.kind==='factory')drawFactory(m.x-12,m.y+20,G.stars[m.c*CHAPTER]?1:0.45);
+  else if(m.kind==='spring')drawSpring(m.x-24,m.y+26,G.stars[m.c*CHAPTER]?1:0.45);
+}
+// Родник в скале: серая скала, из расщелины бежит вода в каменную чашу (когда глава начата).
+function drawSpring(x,y,lf){
+  const rock=mixH('#a3a39d','#9aa0a3',lf),dark=mixH('#7e7e78','#6c7479',lf),light=mixH('#c4c4be','#c9d0d2',lf),moss=mixH('#9a9a94','#6fae4f',lf);
+  ell(x+4,y+4,48,12,'rgba(30,60,20,.26)');
+  poly([[x-42,y+2],[x-34,y-30],[x-16,y-58],[x+6,y-70],[x+24,y-52],[x+38,y-24],[x+44,y+2]],rock);
+  poly([[x+6,y-70],[x+24,y-52],[x+38,y-24],[x+44,y+2],[x+20,y+2],[x+14,y-30]],dark);
+  poly([[x-34,y-30],[x-16,y-58],[x+6,y-70],[x-6,y-44],[x-22,y-26]],light);
+  poly([[x-20,y-56],[x-6,y-66],[x+8,y-68],[x-2,y-58]],moss);
+  // расщелина и вода
+  poly([[x-8,y-34],[x+4,y-36],[x+6,y-24],[x-6,y-24]],'#3c4347');
+  if(lf>0.9){
+    ctx.strokeStyle='#6db7ee';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-1,y-27);ctx.lineTo(x-1,y-6);ctx.stroke();
+    ctx.save();ctx.setLineDash([4,7]);ctx.lineDashOffset=-G.now*0.03;ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-1,y-27);ctx.lineTo(x-1,y-6);ctx.stroke();ctx.restore();
+  }
+  ell(x-1,y-3,19,7,dark);ell(x-1,y-4,15,5,lf>0.9?'#4ea3e3':'#5f6d75');
+  if(lf>0.9)ell(x-5,y-5,7,2,'rgba(255,255,255,.5)');
 }
 // Завод: кирпичный цех с зубчатой крышей и высокой трубой; когда глава начата, из трубы идёт дым.
 function drawFactory(x,y,lf){

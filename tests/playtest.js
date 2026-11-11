@@ -52,8 +52,14 @@ async function tapCell(page, lv, c, mode, button) {
 // Решает улицу: нажимает каждую трубу столько раз, сколько нужно. extra — лишние нажатия (полный оборот одной трубы).
 async function solve(page, mode, extra = 0) {
   const lv = await H(page, 'level');
-  if (extra) { const c = lv.cells.find(c => c.type === 'pipe' && !c.locked); for (let k = 0; k < extra; k++) await tapCell(page, lv, c, mode); }
+  if (extra) { const c = lv.cells.find(c => c.type === 'pipe' && !c.locked && !c.hidden); for (let k = 0; k < extra; k++) await tapCell(page, lv, c, mode); }
   for (const c of lv.cells) for (let k = 0; k < c.taps; k++) await tapCell(page, lv, c, mode);
+  // улицы с люками: трубы под люками открываются по мере того, как подходит вода, — проходим волнами
+  for (let w = 0; w < 40 && lv.hatches; w++) {
+    const cur = await H(page, 'level'), todo = cur.cells.filter(c => c.taps > 0);
+    if (cur.state !== 'play' || !todo.length) break;
+    for (const c of todo) for (let k = 0; k < c.taps; k++) await tapCell(page, lv, c, mode);
+  }
   await sleep(150);
   return H(page, 'level');
 }
@@ -97,7 +103,7 @@ const wrongCount = lv => lv.cells.filter(c => c.taps > 0).length;
 
 const server = await serve();
 const URL = server.url + 'index.html?lang=ru'; // тесты сверяют русские надписи; английский проверяется отдельно ниже
-const guard = setTimeout(() => { console.error('ТЕСТ ЗАВИС: больше 12 минут'); process.exit(1); }, 12 * 60 * 1000);
+const guard = setTimeout(() => { console.error('ТЕСТ ЗАВИС: больше 20 минут'); process.exit(1); }, 20 * 60 * 1000);
 guard.unref();
 
 try {
@@ -182,7 +188,26 @@ try {
       check(`Ул. ${i + 1}: ржавая труба (поворотов: ${rc.left}) на нуле застревает → окно «Труба застряла» → «Заново» всё возвращает`,
         after.left === 0 && m === rc.left && title === 'Труба застряла' && fresh.moves === 0 && fresh.state === 'play' && fresh.cells.find(c => c.x === rc.x && c.y === rc.y).left === rc.left, `ходов ${m}, окно «${title}»`);
     }
-    if ([0, 5, 7, 8, 12, 15, 19, 20, 25, 29, 30, 39].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
+    if (lv.hatches && (i % 10 === 0 || i === total - 1)) {
+      // люк: по нему стучим — ход не тратится; подводим воду к соседней клетке — люк открывается, труба под ним крутится
+      const hid = lv.cells.filter(c => c.hidden);
+      for (const c of hid.slice(0, 3)) await tapCell(page, lv, c, 'touch');
+      const m0 = (await H(page, 'level')).moves;
+      await page.screenshot({ path: `${OUT}/s${i + 1}-hatches.png` });
+      let opened = 0, cur = lv;
+      for (let w = 0; w < 40; w++) {
+        cur = await H(page, 'level');
+        opened = hid.length - cur.cells.filter(c => c.hidden).length;
+        const todo = cur.cells.filter(c => c.taps > 0);
+        if (opened || !todo.length) break;
+        for (const c of todo) for (let k = 0; k < c.taps; k++) await tapCell(page, lv, c, 'touch');
+      }
+      await page.tap('#btnRestart'); await sleep(300);
+      const fresh = await H(page, 'level');
+      check(`Ул. ${i + 1}: люков ${hid.length} — закрытый не крутится, открывается, когда рядом пошла вода; «Заново» закрывает снова`,
+        hid.length > 0 && m0 === 0 && opened > 0 && fresh.moves === 0 && fresh.cells.filter(c => c.hidden).length === hid.length, `открылось ${opened}`);
+    }
+    if ([0, 5, 7, 8, 12, 15, 19, 20, 25, 29, 30, 39, 40, 46, 49].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
     lv = await solve(page, 'touch');
     check(`Ул. ${i + 1}: решена за минимум ходов`, lv.state === 'won' && lv.solved && lv.moves === lv.minTaps, `ходов ${lv.moves}`);
     if ([12, 15, 20, 29, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
