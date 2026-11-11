@@ -45,6 +45,17 @@ export const LEVELS=[
   {name:'Соловьиная', en:'Nightingale', w:6,h:7, nets:['w'], seed:611, turn:'leaf', slack:0.3, blocks:2},
   {name:'Каштановая', en:'Chestnut',    w:6,h:8, nets:['w','e','g'], seed:987, turn:'leaf', slack:0.3, bridges:2, doubles:1},
   {name:'Ярмарочная', en:'Fair',        w:6,h:8, nets:['w'], seed:1602, turn:'leaf', slack:0.25, blocks:3},
+  // Глава 4. Заводская сторона: ржавые трубы (rusty — сколько труб с ограниченным числом поворотов).
+  {name:'Заводская', en:'Factory',      w:5,h:5, nets:['w'], seed:31, rusty:3, slack:0.25, intro:{tag:'tagNew',key:'rust'}},
+  {name:'Литейная', en:'Foundry',       w:5,h:6, nets:['w','e'], seed:32, rusty:4, slack:0.25},
+  {name:'Слесарная', en:'Locksmith',    w:6,h:6, nets:['w','e'], seed:34, rusty:5, slack:0.25, bridges:1},
+  {name:'Кирпичная', en:'Brick',        w:6,h:6, nets:['w'], seed:34, turn:'leaf', rusty:4, slack:0.25},
+  {name:'Складская', en:'Warehouse',    w:6,h:7, nets:['w','g'], seed:35, rusty:6, slack:0.25, doubles:1},
+  {name:'Трубная', en:'Pipe',           w:6,h:7, nets:['w','e'], seed:40, turn:'leaf', rusty:5, slack:0.25, blocks:2},
+  {name:'Фабричная', en:'Works',        w:6,h:7, nets:['w','e','g'], seed:37, rusty:7, slack:0.25, bridges:2},
+  {name:'Паровозная', en:'Locomotive',  w:6,h:8, nets:['w'], seed:38, turn:'leaf', rusty:6, slack:0.25},
+  {name:'Станционная', en:'Station',    w:6,h:8, nets:['w','e','g'], seed:39, turn:'leaf', rusty:6, slack:0.25, doubles:2},
+  {name:'Вокзальная', en:'Terminal',    w:6,h:8, nets:['w','e'], seed:161, turn:'leaf', rusty:8, slack:0.2, bridges:1, doubles:1},
 ];
 // Главы: по 10 улиц. Следующая глава открывается, когда в предыдущей набрано GATE звёзд из 30.
 export const CHAPTER=10, GATE=18;

@@ -76,6 +76,7 @@ if (process.argv[1] && process.argv[1].endsWith('rate.js')) {
       const v = c.nets.map(n => cons[n] || 0);
       if (Math.min(...v) < 3 || Math.max(...v) > 2 * Math.min(...v) + 1) continue; // сети примерно равные
       const r = rate(g, base.turn); if (r.score < lo || r.score > hi) continue;
+      if (base.rusty && r.sols !== '1') continue; // ржавым улицам нужно единственное решение, иначе «труба застряла» может соврать
       console.log(fmt(seed, { ...c, name: 'seed ' + seed }, g, r)); found++;
     }
     if (!found) console.log('ничего не найдено — расширь границы сложности');

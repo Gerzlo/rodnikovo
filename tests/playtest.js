@@ -142,6 +142,7 @@ try {
     await page.tap('#btnSound'); await sleep(100);
     check('Кнопка звука выключает и включает звук, выбор запоминается', off === '0' && (await page.evaluate(() => localStorage.getItem('rodnikovo-sound'))) === '1');
   }
+  check('Звук: после первого нажатия кнопки звук разрешён браузером', ['running'].includes(await H(page, 'sound')), await H(page, 'sound'));
   const total = (await H(page, 'stars')).length;
   for (let i = 0; i < total; i++) {
     // первая улица — кнопкой «Играть», дальше улицы открываются сами после кнопки «Дальше»
@@ -166,10 +167,25 @@ try {
       await page.tap('#btnRestart'); await sleep(300);
       check(`Ул. ${i + 1}: поворотный ввод крутится и тратит ход`, !!leaf && m === 4, `ходов ${m}`);
     }
-    if ([0, 5, 7, 8, 12, 15, 19, 20, 25, 29].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
+    if (lv.rusty && i % 10 === 0) {
+      // ржавая труба: крутим, пока счётчик не дойдёт до нуля в неправильном положении → «Труба застряла» → «Заново»
+      const rc = lv.cells.find(c => c.left != null && c.left > c.taps) || lv.cells.find(c => c.left != null); // труба с одним лишним поворотом
+      let n = 0; for (; n < 8; n++) { const c = (await H(page, 'level')).cells.find(c => c.x === rc.x && c.y === rc.y); if (c.left === 0) break; await tapCell(page, lv, rc, 'touch'); }
+      const after = (await H(page, 'level')).cells.find(c => c.x === rc.x && c.y === rc.y);
+      await tapCell(page, lv, rc, 'touch'); // на нуле труба уже не крутится
+      const m = (await H(page, 'level')).moves;
+      await sleep(900);
+      const title = await overlay(page);
+      if (title) await page.screenshot({ path: `${OUT}/s${i + 1}-stuck.png` });
+      await page.tap('#ovB1').catch(() => {}); await sleep(350);
+      const fresh = (await H(page, 'level'));
+      check(`Ул. ${i + 1}: ржавая труба (поворотов: ${rc.left}) на нуле застревает → окно «Труба застряла» → «Заново» всё возвращает`,
+        after.left === 0 && m === rc.left && title === 'Труба застряла' && fresh.moves === 0 && fresh.state === 'play' && fresh.cells.find(c => c.x === rc.x && c.y === rc.y).left === rc.left, `ходов ${m}, окно «${title}»`);
+    }
+    if ([0, 5, 7, 8, 12, 15, 19, 20, 25, 29, 30, 39].includes(i)) await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-start.png` });
     lv = await solve(page, 'touch');
     check(`Ул. ${i + 1}: решена за минимум ходов`, lv.state === 'won' && lv.solved && lv.moves === lv.minTaps, `ходов ${lv.moves}`);
-    if ([12, 15, 20, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
+    if ([12, 15, 20, 29, total - 1].includes(i)) { await sleep(1000); await page.screenshot({ path: `${OUT}/s${String(i + 1).padStart(2, '0')}-solved.png` }); }
     const st = await winStars(page), title = await page.textContent('#ovT');
     check(`Ул. ${i + 1}: окно победы, 3 звезды`, st === 3 && title.includes(street), title);
     const b1 = await page.textContent('#ovB1');

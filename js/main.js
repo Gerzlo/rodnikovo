@@ -1,9 +1,9 @@
 // Главный модуль: экраны, кнопки, касания, ход игры и главный цикл.
-import { DX, DY, tapsToSolve, evaluate, generate, isLeaf, canTurn } from './core.js';
+import { DX, DY, tapsToSolve, evaluate, generate, isLeaf, canTurn, isStuck } from './core.js';
 import { LEVELS, CHAPTER, GATE } from './levels.js';
 import { G, B, M, unlocked, currentIdx, gateNeed, chapterStars } from './state.js';
 import { t, lang, streetName, netsText } from './i18n.js';
-import { sound } from './sound.js';
+import { sound, soundState } from './sound.js';
 import { setCtx } from './art.js';
 import { spawn, updParts, drawPart } from './fx.js';
 import { layoutLevel, drawLevel } from './board.js';
@@ -69,6 +69,7 @@ function tapLevel(px,py){
   if(gx<0||gy<0||gx>=L.W||gy>=L.H)return;
   const c=L.cells[gy*L.W+gx];
   if(!canTurn(L,c)){if(c.type==='pipe'){c.wig=G.now;sound.play('stuck');}return;}
+  if(c.left>0)c.left--;
   c.turns++;c.rot=c.turns&3;c.pop=G.now;G.moves++;G.tut=-1;sound.play('turn');
   afterChange();
 }
@@ -77,6 +78,7 @@ function tapLevel(px,py){
 function afterChange(){
   const L=G.L,r=refresh();updateHud();
   if(r.solved)win(r);
+  else if(isStuck(L)){L.state='lost';setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='lost'){sound.play('fail');showStuck();}},500);}
   else if(G.moves>=L.limit){L.state='lost';setTimeout(()=>{if(G.L===L&&G.screen==='level'&&L.state==='lost'){sound.play('fail');showFail();}},500);}
 }
 const starsFor=m=>m<=G.L.t3?3:m<=G.L.t2?2:1;
@@ -104,6 +106,11 @@ function showFail(){
   showOverlay({title:t('failTitle'),text:t('failText'),
     b1:{label:t('plus5'),fn:()=>{const L=G.L;fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='lost')return;L.limit+=5;L.state='play';updateHud();});}},
     b2:{label:t('restart'),fn:()=>startLevel(li)}});
+}
+// Ржавая труба застряла в неправильном положении: улицу уже не решить, только заново.
+function showStuck(){
+  const li=G.li;
+  showOverlay({title:t('stuckTitle'),text:t('stuckText'),b1:{label:t('restart'),fn:()=>startLevel(li)},b2:{label:t('toMap'),fn:()=>goMap()}});
 }
 function fakeAd(fn){toast(t('ad'));platform.rewarded(fn);}
 function openLevel(i){
@@ -179,7 +186,7 @@ ov.addEventListener('click',e=>{if(e.target.closest('button'))sound.play('ui');}
 btnHint.addEventListener('click',()=>{
   const L=G.L;
   if(G.screen!=='level'||L.state!=='play')return;
-  fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='play')return;const c=pickHint();if(!c)return;const n=tapsToSolve(c);c.turns+=n;c.rot=c.turns&3;c.hintAt=G.now;G.tut=-1;sound.play('hint');afterChange();});
+  fakeAd(()=>{if(G.L!==L||G.screen!=='level'||L.state!=='play')return;const c=pickHint();if(!c)return;const n=tapsToSolve(c);c.turns+=n;c.rot=c.turns&3;if(c.left!=null)c.left-=n;c.hintAt=G.now;G.tut=-1;sound.play('hint');afterChange();});
 });
 // На улице труба поворачивается сразу при касании. На карте касание открывает улицу, только если палец
 // не сдвинулся: сдвиг — это прокрутка карты.
@@ -224,12 +231,13 @@ const stat=a=>{if(!a.length)return null;const s=a.slice().sort((p,q)=>p-q);retur
 window.__rodnikovo={
   screen:()=>G.screen,
   stars:()=>G.stars.slice(),
-  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
+  level:()=>{const L=G.L;return L?{index:G.li,W:L.W,H:L.H,rusty:L.rusty||0,nets:L.nets.slice(),moves:G.moves,limit:L.limit,t3:L.t3,t2:L.t2,minTaps:L.minTaps,state:L.state,
     solved:!!(L.res&&L.res.solved),leaks:L.res?L.res.leaks.length:0,conflicts:L.res?L.res.conflicts.length:0,
     board:{x:B.x,y:B.y,S:B.S},
     turn:L.turn,
-    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,turns:canTurn(L,c),taps:canTurn(L,c)?tapsToSolve(c):0}))}:null;},
+    cells:L.cells.map(c=>({x:c.x,y:c.y,type:c.type,net:c.segs.length?c.segs[0].net:null,locked:c.locked,shared:c.shared,left:c.left==null?null:c.left,turns:canTurn(L,c),taps:canTurn(L,c)?tapsToSolve(c):0}))}:null;},
   lang:()=>lang,
+  sound:()=>soundState(),
   mapNodes:()=>NODES.map(([x,y])=>{const sx=M.ox+x*M.sc,sy=M.oy+y*M.sc;return {x:sx,y:sy,vis:sx>20&&sx<G.VW-20&&sy>24&&sy<G.VH-24};}),
   mapScroll:()=>M.cy,
   frame:()=>({work:stat(perfBuf),gap:stat(gapBuf)}),

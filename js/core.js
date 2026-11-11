@@ -6,7 +6,10 @@ export const LEAF = { w: 'house', e: 'lamp', g: 'greenhouse' };
 export const isLeaf = t => t === 'house' || t === 'lamp' || t === 'greenhouse';
 
 // Можно ли крутить клетку: трубу без замка — всегда; ввод дома, фонаря или теплицы — на улицах с turn:'leaf'.
-export const canTurn = (L, c) => c.type === 'pipe' ? !c.locked : L.turn === 'leaf' && isLeaf(c.type);
+// Ржавая труба (left — сколько поворотов ей осталось) при нуле больше не крутится.
+export const canTurn = (L, c) => c.left === 0 ? false : c.type === 'pipe' ? !c.locked : L.turn === 'leaf' && isLeaf(c.type);
+// Тупик: какой-то ржавой трубе уже не хватит поворотов, чтобы встать правильно.
+export const isStuck = L => L.cells.some(c => c.left != null && tapsToSolve(c) > c.left);
 
 // Направления: 0 — север, 1 — восток, 2 — юг, 3 — запад. Маска клетки — набор открытых сторон (биты 1, 2, 4, 8).
 export const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0], BIT = [1, 2, 4, 8];
@@ -147,8 +150,16 @@ function tryGen(cfg,rng){
     if(need<rotatable.length*0.6)continue;
     if(evaluate(L).solved)continue;
     const slack=Math.max(3,Math.ceil(taps*(cfg.slack||0.35))); // запас ходов сверх минимума
-    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,turn,
-      cells:cells.map((c,i)=>({x:c.x,y:c.y,type:c.type,segs:c.segs.map(s=>({net:s.net,mask:s.mask})),rot:c.rot,locked:c.locked,shared:c.shared,v:(i*37+ri(997))%997})),
+    // ржавые трубы: поворотов ровно столько, сколько нужно, или на один больше
+    const nR=cfg.rusty||0;
+    if(nR){
+      for(const c of cells)c.left=undefined;
+      const rp=rotatable.filter(c=>c.type==='pipe'&&tapsToSolve(c)>0);
+      if(rp.length<nR)continue;
+      for(let k=0;k<nR;k++){const j=ri(rp.length),c=rp[j];c.left=tapsToSolve(c)+ri(2);rp.splice(j,1);}
+    }
+    return {W,H,nets,src:srcIdx,bridges:nB,doubles:nD,turn,rusty:nR,
+      cells:cells.map((c,i)=>({x:c.x,y:c.y,type:c.type,segs:c.segs.map(s=>({net:s.net,mask:s.mask})),rot:c.rot,locked:c.locked,shared:c.shared,left:c.left,v:(i*37+ri(997))%997})),
       minTaps:taps,limit:taps+slack,t3:taps+Math.floor(slack/3),t2:taps+Math.floor(slack*2/3)};
   }
   return null;

@@ -17,6 +17,7 @@ const THEMES=[
   {grass:['#97d16f','#7fbb5b']},
   {grass:['#97d16f','#7fbb5b'],name:'ch2',mark:'gas'},
   {grass:['#b3d472','#93bd58'],name:'ch3',mark:'well'},
+  {grass:['#a3c98a','#86b06c'],name:'ch4',mark:'factory'},
 ];
 const theme=c=>THEMES[Math.min(c,THEMES.length-1)];
 // Образец главы — вторая часть посёлка: точки улиц, кварталы (x, y, сторона: −1 — дома левее точки, 1 — правее) и места построек.
@@ -24,7 +25,7 @@ const N1=[[200,640],[295,582],[215,522],[110,492],[185,416],[300,366],[240,296],
 const D1=[[118,656,-1],[352,604,1],[318,512,1],[54,536,-1],[92,392,-1],[350,404,1],[330,270,1],[54,282,-1],[104,152,-1],[358,160,1]];
 const TN=[[215,55],[105,0],[190,-60],[300,-105],[250,-180],[130,-215],[95,-295],[200,-340],[305,-390],[230,-460]];
 const TD=[[318,40,1],[50,62,-1],[100,-75,-1],[352,-60,1],[340,-200,1],[52,-195,-1],[55,-370,-1],[215,-272,1],[360,-330,1],[320,-470,1]];
-const T_MARK=[262,-28],T_POND=[150,-135],T_BED=[78,-452],T_NAME=[150,104],T_END=[180,-560],T_SIGN=[176,-548];
+const T_MARK=[262,-28],T_POND=[150,-135],T_BED=[78,-452],T_NAME=[138,104],T_END=[180,-560],T_SIGN=[176,-548];
 // Перенос точки образца в главу c (c ≥ 1): сдвиг вверх, чётные по счёту главы — зеркально.
 const place=(c,[x,y,sd])=>{const m=c%2===0;return [m?MAP.w-x:x,y-(c-1)*STEP,sd==null?undefined:(m?-sd:sd)];};
 export const NODES=N1.slice(),DISTRICTS=D1.slice();
@@ -210,6 +211,21 @@ function drawBoard(x,y,lines,w){
 function drawMark(m){
   if(m.kind==='gas')drawGasTank(m.x,m.y,74);
   else if(m.kind==='well')drawWell(m.x-14,m.y+24,G.stars[m.c*CHAPTER]?1:0.45);
+  else if(m.kind==='factory')drawFactory(m.x-12,m.y+20,G.stars[m.c*CHAPTER]?1:0.45);
+}
+// Завод: кирпичный цех с зубчатой крышей и высокой трубой; когда глава начата, из трубы идёт дым.
+function drawFactory(x,y,lf){
+  const brick=mixH('#9c9a96','#c0603f',lf),dark=mixH('#77756f','#8f4028',lf),roof=mixH('#6f6f6c','#56606b',lf),win=lf>0.9?'#ffe08a':'#cfd6da';
+  ell(x+4,y+3,44,11,'rgba(30,60,20,.26)');
+  // труба
+  poly([[x+22,y-2],[x+34,y-2],[x+32,y-66],[x+24,y-66]],brick);ctx.fillStyle=dark;ctx.fillRect(x+23,y-70,10,5);
+  ctx.fillStyle='rgba(255,255,255,.75)';ctx.fillRect(x+24.5,y-58,7,4);
+  if(lf>0.9)for(let k=0;k<3;k++){const q=((G.now/2600)+k/3)%1;circ(x+28+q*14,y-74-q*26,4+q*7,`rgba(240,240,240,${0.7*(1-q)})`);}
+  // цех
+  ctx.fillStyle=dark;ctx.fillRect(x-36,y-24,56,26);ctx.fillStyle=brick;ctx.fillRect(x-36,y-26,56,26);
+  for(let k=0;k<3;k++){const rx=x-36+k*18.67;poly([[rx,y-26],[rx,y-40],[rx+18.67,y-26]],roof);poly([[rx,y-40],[rx+5,y-40],[rx+18.67,y-28],[rx+18.67,y-26]],mixH(roof,'#ffffff',0.25));}
+  for(let k=0;k<3;k++){ctx.fillStyle=win;ctx.fillRect(x-31+k*17,y-19,9,8);ctx.strokeStyle=dark;ctx.lineWidth=1;ctx.strokeRect(x-31+k*17,y-19,9,8);}
+  ctx.fillStyle=mixH('#5c5c58','#4a3424',lf);ctx.fillRect(x-12,y-9,10,9);
 }
 // Колодец-журавль: сруб с крышей-навесом, длинный шест с ведром.
 function drawWell(x,y,lf){

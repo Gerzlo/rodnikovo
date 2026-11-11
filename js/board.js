@@ -133,9 +133,30 @@ function drawTurnTile(x,y,S,g,r){
   for(let k=0;k<8;k++){const a=k*Math.PI/4+Math.PI/8;ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*R*0.86,cy+Math.sin(a)*R*0.86);ctx.lineTo(cx+Math.cos(a)*R*0.96,cy+Math.sin(a)*R*0.96);ctx.stroke();}
   ctx.lineCap='butt';
 }
+// Плитка ржавой трубы: бурый железный лист с пятнами ржавчины и заклёпками.
+function drawRustTile(c,x,y,S,g,r){
+  const w=S-2*g;
+  ctx.fillStyle='#6b4630';rrect(x+g,y+g+2.5,w,w,r);ctx.fill();
+  const gr=ctx.createLinearGradient(0,y,0,y+S);gr.addColorStop(0,'#cf9a6c');gr.addColorStop(1,'#a87348');
+  ctx.fillStyle=gr;rrect(x+g,y+g,w,w-1.5,r);ctx.fill();
+  ctx.save();rrect(x+g,y+g,w,w-1.5,r);ctx.clip();
+  const v=c.v;
+  for(let k=0;k<5;k++){const px=x+S*(0.12+((v*(k+3))%76)/100),py=y+S*(0.14+((v*(k+11))%72)/100);ctx.fillStyle=k%2?'rgba(140,70,30,.38)':'rgba(96,52,26,.3)';ctx.beginPath();ctx.ellipse(px,py,S*(0.07+((v+k*5)%7)/100),S*(0.05+((v+k*3)%5)/100),k,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,236,210,.45)';ctx.lineWidth=Math.max(1,S*0.02);rrect(x+g+1.5,y+g+1.5,w-3,w-4.5,Math.max(1,r-1.5));ctx.stroke();
+  for(const [fx,fy] of [[0.17,0.17],[0.17,0.81],[0.83,0.81]]){circ(x+S*fx,y+S*fy+0.8,S*0.028,'#6b4630');circ(x+S*fx,y+S*fy,S*0.024,'#e6c39c');}
+}
+// Счётчик на ржавой трубе: сколько поворотов осталось. На нуле — тёмный, труба застряла.
+function drawRustCount(x,y,S,n,t){
+  const r=S*0.11,pop=t<220?1+0.35*Math.sin(Math.PI*t/220):1;
+  circ(x,y+r*0.16,r*pop,'rgba(20,40,20,.28)');circ(x,y,r*pop,n>0?'#fff4e2':'#5a3a28');
+  ctx.strokeStyle=n>0?'#a3562a':'#2e1c12';ctx.lineWidth=Math.max(1,r*0.16);ctx.beginPath();ctx.arc(x,y,r*pop,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=n>0?'#8a3f18':'#d9b9a0';ctx.font=`800 ${Math.round(r*1.45)}px Nunito, system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(n),x,y+r*0.08);
+}
 function drawTile(c,x,y,S){
   const g=Math.max(1.5,S*0.035),r=S*0.16;
   if(c.type==='src'){drawSourceTile(c.segs[0].net,x,y,S,g,r);return;}
+  if(c.left!=null){drawRustTile(c,x,y,S,g,r);return;}
   if(c.locked){
     ctx.fillStyle='#8f8670';rrect(x+g,y+g+2,S-2*g,S-2*g,r);ctx.fill();
     ctx.fillStyle='#d3c6a6';rrect(x+g,y+g,S-2*g,S-2*g-2,r);ctx.fill();
@@ -222,6 +243,7 @@ export function drawLevel(){
     const x0=bx+c.x*S,y0=by+c.y*S;
     if(isLeaf(c.type))badge(x0+S*0.82,y0+S*0.18,S*0.1,c.segs[0].net,c.segs[0].f>0.85);
     else if(c.type==='pipe'&&c.locked)drawLock(x0+S*0.8,y0+S*0.2,S);
+    else if(c.left!=null)drawRustCount(x0+S*0.82,y0+S*0.18,S,c.left,now-(c.pop||-1e9));
   }
   if(res){
     const pulse=0.6+0.4*Math.sin(now/180);
