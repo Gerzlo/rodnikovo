@@ -245,6 +245,7 @@ window.__rodnikovo={
 };
 
 /* ---------- главный цикл ---------- */
+let nextBird=0;
 const jumpLabel=(i,up)=>(up?'↑ ':'↓ ')+t('toCurrent',{i:i+1});
 let last=performance.now();
 function loop(t){
@@ -270,6 +271,8 @@ function loop(t){
   }
   if(G.screen==='map'){
     updMap(dt);
+    // на карте изредка поют птицы
+    if(t>nextBird){if(nextBird)sound.play('bird');nextBird=t+9000+Math.random()*12000;}
     // текущая улица ушла за край экрана — показываем кнопку «к улице»
     {const ci=currentIdx(),sy=M.oy+NODES[ci][1]*M.sc,off=sy<10||sy>G.VH-10,lab=jumpLabel(ci,sy<10);
      if(btnJump.hidden===off)btnJump.hidden=!off;if(off&&btnJump.textContent!==lab)btnJump.textContent=lab;}
