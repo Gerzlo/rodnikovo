@@ -54,7 +54,7 @@ jobs:
       - name: Сборка сайта
         run: |
           mkdir _site
-          cp -r index.html css js _site/
+          cp -r index.html manifest.webmanifest icons css js _site/
 
       - uses: actions/upload-pages-artifact@v3
         with:

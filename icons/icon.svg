@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Ярлык игры «Родниково»: водонапорная башня, труба с водой и дом с горящим окном. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc8f2"/><stop offset="0.6" stop-color="#cdeefc"/></linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ed671"/><stop offset="1" stop-color="#5d9a42"/></linearGradient>
+    <linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b6e08a"/><stop offset="1" stop-color="#86c461"/></linearGradient>
+    <linearGradient id="tank" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f2f7fa"/><stop offset="0.5" stop-color="#bccfdd"/><stop offset="1" stop-color="#7c94a9"/></linearGradient>
+    <linearGradient id="col" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d6e1e9"/><stop offset="0.45" stop-color="#95abbd"/><stop offset="1" stop-color="#5f768a"/></linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e46a4c"/><stop offset="1" stop-color="#a8392a"/></linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fff6c4"/><stop offset="0.55" stop-color="#ffe27a"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <circle cx="800" cy="210" r="150" fill="url(#sun)"/>
+  <circle cx="800" cy="210" r="72" fill="#ffe27a"/>
+  <!-- облачко -->
+  <g fill="#ffffff" opacity="0.9"><ellipse cx="590" cy="150" rx="80" ry="36"/><ellipse cx="640" cy="128" rx="60" ry="44"/><ellipse cx="535" cy="168" rx="52" ry="28"/></g>
+  <!-- холмы -->
+  <path d="M0 610 C 200 540 380 560 560 610 C 740 660 880 600 1024 560 L1024 1024 L0 1024Z" fill="url(#hill2)"/>
+  <path d="M0 720 C 240 660 520 690 700 740 C 840 780 940 760 1024 740 L1024 1024 L0 1024Z" fill="url(#hill)"/>
+
+  <!-- водонапорная башня -->
+  <g transform="translate(330 0)">
+    <ellipse cx="18" cy="742" rx="120" ry="26" fill="rgba(30,60,20,.28)"/>
+    <path d="M-62 740 L62 740 L44 470 L-44 470Z" fill="url(#col)"/>
+    <g stroke="rgba(40,60,80,.35)" stroke-width="5"><path d="M-57 672 H57 M-53 605 H53 M-48 538 H48"/></g>
+    <rect x="-34" y="672" width="40" height="68" rx="8" fill="#4b5d6e"/>
+    <!-- бак -->
+    <path d="M-128 300 L-128 470 A128 34 0 0 0 128 470 L128 300Z" fill="url(#tank)"/>
+    <path d="M-128 370 A128 34 0 0 0 128 370 L128 402 A128 34 0 0 1 -128 402Z" fill="#2a7fd6"/>
+    <path d="M-128 386 A128 34 0 0 0 128 386" fill="none" stroke="#6db7ee" stroke-width="6" opacity="0.8"/>
+    <!-- крыша -->
+    <path d="M-146 300 L0 180 L146 300 A146 34 0 0 1 -146 300Z" fill="#596e82"/>
+    <path d="M-110 302 L-8 190 L-60 312Z" fill="rgba(255,255,255,.22)"/>
+    <circle cx="0" cy="172" r="15" fill="#dfe8ef"/>
+  </g>
+
+  <!-- труба с водой: от башни к дому -->
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="round">
+    <path id="p" d="M352 740 L352 860 L620 860 Q700 860 700 780 L700 700" stroke="rgba(22,48,18,.3)" stroke-width="96" transform="translate(8 16)"/>
+    <path d="M352 740 L352 860 L620 860 Q700 860 700 780 L700 700" stroke="#164c88" stroke-width="96"/>
+    <path d="M352 740 L352 860 L620 860 Q700 860 700 780 L700 700" stroke="#3d97ea" stroke-width="70"/>
+    <path d="M352 740 L352 860 L620 860 Q700 860 700 780 L700 700" stroke="#d7f2ff" stroke-width="16" stroke-dasharray="26 64" opacity="0.85"/>
+    <path d="M340 740 L340 848 L620 848 Q688 848 688 780 L688 700" stroke="rgba(255,255,255,.45)" stroke-width="12" transform="translate(-14 -12)"/>
+  </g>
+  <!-- латунные муфты -->
+  <g fill="#cfa152" stroke="#7d5a26" stroke-width="6">
+    <rect x="286" y="752" width="132" height="34" rx="12"/>
+    <rect x="486" y="796" width="34" height="128" rx="12"/>
+    <rect x="634" y="712" width="132" height="34" rx="12"/>
+  </g>
+
+  <!-- дом -->
+  <g transform="translate(700 690)">
+    <ellipse cx="14" cy="6" rx="190" ry="30" fill="rgba(30,60,20,.25)"/>
+    <path d="M-150 0 L-150 -190 L150 -190 L150 0Z" fill="#f6efe0"/>
+    <path d="M150 0 L150 -190 L190 -215 L190 -25Z" fill="#d8ccb3"/>
+    <path d="M-180 -180 L0 -330 L180 -180Z" fill="url(#roof)"/>
+    <path d="M180 -180 L0 -330 L40 -350 L220 -205Z" fill="#8f2f22"/>
+    <path d="M-180 -180 L180 -180 L220 -205 L216 -190 L180 -168 L-180 -168Z" fill="#7d2a1e"/>
+    <rect x="-112" y="-140" width="80" height="74" rx="8" fill="#ffd25a" stroke="#8a6a3c" stroke-width="10"/>
+    <path d="M-72 -140 V-66 M-112 -103 H-32" stroke="#8a6a3c" stroke-width="7"/>
+    <rect x="28" y="-120" width="70" height="120" rx="8" fill="#8a5a32"/>
+    <circle cx="82" cy="-58" r="7" fill="#e9c27a"/>
+  </g>
+  <!-- капля -->
+  <path d="M168 470 C 130 528 110 560 110 590 a58 58 0 0 0 116 0 c0 -30 -20 -62 -58 -120z" fill="#3d97ea" stroke="#164c88" stroke-width="10"/>
+  <ellipse cx="146" cy="580" rx="12" ry="22" fill="rgba(255,255,255,.7)" transform="rotate(20 146 580)"/>
+</svg>

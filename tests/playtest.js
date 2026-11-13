@@ -120,6 +120,15 @@ try {
     // Режим «На экран Домой» на iPhone здесь не воспроизвести — проверяем, что защита от залипшего масштаба на месте.
     const vp = await page.getAttribute('meta[name="viewport"]', 'content');
     check('Масштаб страницы заблокирован (для iPhone «На экран Домой»)', /maximum-scale=1(,|$)/.test(vp) && /user-scalable=no/.test(vp), vp);
+    // ярлык на экране «Домой»: картинка 180×180 для iPhone и манифест с иконками для Android
+    const ic = await page.evaluate(async () => {
+      const href = document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href');
+      const img = new Image(); img.src = href; await img.decode().catch(() => {});
+      const man = await fetch(document.querySelector('link[rel="manifest"]').getAttribute('href')).then(r => r.json()).catch(() => null);
+      const ok = man ? await Promise.all(man.icons.map(i => fetch(i.src).then(r => r.ok))) : [];
+      return { w: img.naturalWidth, h: img.naturalHeight, name: man && man.short_name, icons: ok.length, all: ok.every(Boolean) };
+    });
+    check('Ярлык «На экран Домой»: картинка 180×180 и манифест с иконками', ic.w === 180 && ic.h === 180 && ic.name === 'Родниково' && ic.icons >= 2 && ic.all, JSON.stringify(ic));
   }
   await page.screenshot({ path: `${OUT}/01-map-start.png` });
   {
